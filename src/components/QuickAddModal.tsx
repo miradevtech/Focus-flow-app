@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { api } from '../api/client';
 import { TabType, Priority } from '../types';
 import { X, CheckSquare, Target, FolderKanban, ShoppingCart, Bell, FileText, Users } from 'lucide-react';
+import { TimePicker24 } from './TimePicker24';
 
 interface QuickAddModalProps {
   isOpen: boolean;
@@ -194,28 +195,20 @@ export const QuickAddModal: React.FC<QuickAddModalProps> = ({ isOpen, onClose, o
                 />
               </div>
               {type === 'tasks' && (
-                <div>
-                  <label className="block text-xs font-medium text-zinc-400 mb-1">Due Time (24-hr)</label>
-                  <input
-                    type="time"
-                    step="60"
-                    lang="en-GB"
-                    value={dueTime}
-                    onChange={(e) => setDueTime(e.target.value)}
-                    className="w-full px-3.5 py-2.5 bg-zinc-900 border border-zinc-800 rounded-xl text-white text-sm focus:outline-none focus:border-blue-500"
+                <div className="col-span-full sm:col-span-1">
+                  <TimePicker24
+                    value={dueTime || '18:07'}
+                    onChange={setDueTime}
+                    label="Due Time (24-hr)"
                   />
                 </div>
               )}
               {type === 'alerts' && (
-                <div>
-                  <label className="block text-xs font-medium text-zinc-400 mb-1">Alert Time (24-hr)</label>
-                  <input
-                    type="time"
-                    step="60"
-                    lang="en-GB"
-                    value={dueTime}
-                    onChange={(e) => setDueTime(e.target.value)}
-                    className="w-full px-3.5 py-2.5 bg-zinc-900 border border-zinc-800 rounded-xl text-white text-sm focus:outline-none focus:border-blue-500"
+                <div className="col-span-full sm:col-span-1">
+                  <TimePicker24
+                    value={dueTime || '18:07'}
+                    onChange={setDueTime}
+                    label="Alert Time (24-hr)"
                   />
                 </div>
               )}

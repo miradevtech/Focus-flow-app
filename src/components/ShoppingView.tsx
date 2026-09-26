@@ -182,7 +182,7 @@ export const ShoppingView: React.FC<ShoppingViewProps> = ({ shoppingItems, onRef
             <h3 className="text-white font-medium text-lg">Your shopping list is empty</h3>
             <p className="text-gray-400 text-sm">Add items you plan to buy.</p>
             <button
-              onClick={onOpenQuickAdd}
+              onClick={handleOpenAdd}
               className="px-4 py-2 bg-indigo-600/20 text-indigo-400 border border-indigo-500/30 rounded-xl text-sm font-medium hover:bg-indigo-600/30 transition-all inline-block mt-2"
             >
               Add Shopping Item

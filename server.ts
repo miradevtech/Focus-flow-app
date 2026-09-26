@@ -784,26 +784,27 @@ async function main() {
   });
 
   app.post('/api/alerts', requireAuth, (req: AuthenticatedRequest, res) => {
-    const { title, description, date, time, userTimezone } = req.body;
+    const { title, description, date, time, userTimezone, remindAtUtc: clientRemindAtUtc } = req.body;
     if (!title || !title.trim() || !date || !time) {
       return res.status(400).json({ error: 'Title, date, and time are required.' });
     }
 
-    // Convert local user date & time in their timezone into UTC ISO string
     const tz = userTimezone || Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
-    let remindAtUtc: string;
+    let remindAtUtc = clientRemindAtUtc;
 
-    try {
-      // Calculate target timestamp
-      const localDateStr = `${date}T${time}:00`;
-      const localTimeMs = new Date(localDateStr).getTime();
-      if (isNaN(localTimeMs)) {
+    if (!remindAtUtc) {
+      try {
+        const cleanTime = String(time).replace('.', ':');
+        const localDateStr = `${date}T${cleanTime}:00`;
+        const localTimeMs = new Date(localDateStr).getTime();
+        if (isNaN(localTimeMs)) {
+          remindAtUtc = new Date(Date.now() + 60000).toISOString();
+        } else {
+          remindAtUtc = new Date(localDateStr).toISOString();
+        }
+      } catch {
         remindAtUtc = new Date(Date.now() + 60000).toISOString();
-      } else {
-        remindAtUtc = new Date(localDateStr).toISOString();
       }
-    } catch {
-      remindAtUtc = new Date(Date.now() + 60000).toISOString();
     }
 
     const db = getDb();

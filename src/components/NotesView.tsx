@@ -117,7 +117,7 @@ export const NotesView: React.FC<NotesViewProps> = ({ notes, onRefresh, onOpenQu
           <h3 className="font-semibold text-white mb-1">No notes found</h3>
           <p className="text-xs text-zinc-400 mb-4">Create your first note to keep your thoughts organized.</p>
           <button
-            onClick={onOpenQuickAdd}
+            onClick={handleOpenAdd}
             className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-xs font-medium rounded-xl transition-colors"
           >
             Create Note

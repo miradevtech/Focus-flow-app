@@ -58,15 +58,24 @@ export const AlertsView: React.FC<AlertsViewProps> = ({ alerts, onRefresh }) => 
 
     setIsSaving(true);
     try {
-      const userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      const userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
       const cleanTime = time.replace('.', ':');
+      let remindAtUtc: string;
+      try {
+        const localTarget = new Date(`${date}T${cleanTime}:00`);
+        remindAtUtc = isNaN(localTarget.getTime()) ? new Date().toISOString() : localTarget.toISOString();
+      } catch {
+        remindAtUtc = new Date().toISOString();
+      }
+
       if (editingAlert) {
         await api.updateAlert(editingAlert.id, {
           title: title.trim(),
           description: description.trim(),
           date,
           time: cleanTime,
-          userTimezone
+          userTimezone,
+          remindAtUtc
         });
         setEditingAlert(null);
       } else {
@@ -75,7 +84,8 @@ export const AlertsView: React.FC<AlertsViewProps> = ({ alerts, onRefresh }) => 
           description: description.trim(),
           date,
           time: cleanTime,
-          userTimezone
+          userTimezone,
+          remindAtUtc
         });
         setIsAddOpen(false);
       }
@@ -117,6 +127,30 @@ export const AlertsView: React.FC<AlertsViewProps> = ({ alerts, onRefresh }) => 
         new Notification('FocusFlow Notifications Enabled', {
           body: 'You will now receive scheduled reminders and alert notifications!'
         });
+
+        // Register push subscription with server
+        try {
+          if ('serviceWorker' in navigator) {
+            const reg = await navigator.serviceWorker.ready;
+            const { publicKey } = await api.getVapidKey();
+            if (publicKey && reg.pushManager) {
+              const padding = '='.repeat((4 - (publicKey.length % 4)) % 4);
+              const base64 = (publicKey + padding).replace(/-/g, '+').replace(/_/g, '/');
+              const rawData = window.atob(base64);
+              const appServerKey = new Uint8Array(rawData.length);
+              for (let i = 0; i < rawData.length; ++i) {
+                appServerKey[i] = rawData.charCodeAt(i);
+              }
+              const sub = await reg.pushManager.subscribe({
+                userVisibleOnly: true,
+                applicationServerKey: appServerKey
+              });
+              await api.subscribePush(sub);
+            }
+          }
+        } catch (e) {
+          console.warn('Push registration skipped or failed:', e);
+        }
       } else {
         alert('Notification permission was denied or dismissed.');
       }

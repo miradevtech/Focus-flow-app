@@ -133,7 +133,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
             <div className="text-center py-12 px-4 rounded-2xl border border-dashed border-zinc-800">
               <p className="text-sm text-zinc-400 mb-3">No tasks created yet.</p>
               <button
-                onClick={onOpenQuickAdd}
+                onClick={() => onNavigate('tasks')}
                 className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-medium transition-colors"
               >
                 Create your first task

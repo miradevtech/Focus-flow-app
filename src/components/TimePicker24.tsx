@@ -61,8 +61,8 @@ export const TimePicker24: React.FC<TimePicker24Props> = ({
             className="w-full bg-zinc-950 border border-zinc-800 hover:border-zinc-700 rounded-xl px-3 py-2.5 text-white text-sm font-mono focus:outline-none focus:border-indigo-500 transition-colors"
           >
             {hours.map((h) => (
-              <option key={h} value={h} className="bg-zinc-900 text-white">
-                {h} ({parseInt(h, 10) >= 12 ? `${h}:00 (PM)` : `${h}:00 (AM)`})
+              <option key={h} value={h} className="bg-zinc-900 text-white font-mono">
+                {h}:00
               </option>
             ))}
           </select>

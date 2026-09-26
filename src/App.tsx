@@ -25,7 +25,7 @@ import { NotesView } from './components/NotesView';
 import { PeopleView } from './components/PeopleView';
 import { HistoryView } from './components/HistoryView';
 import { Logo } from './components/Logo';
-import { Smartphone, X, Download } from 'lucide-react';
+import { Smartphone, X, Download, Bell } from 'lucide-react';
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -149,6 +149,61 @@ export default function App() {
       console.error(err);
     }
   };
+
+  // Active Reminder Watcher & In-App Alerts
+  const [triggeredPopup, setTriggeredPopup] = useState<Alert | null>(null);
+
+  const playChime = () => {
+    try {
+      const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(587.33, audioCtx.currentTime); // D5
+      osc.frequency.exponentialRampToValueAtTime(880, audioCtx.currentTime + 0.15); // A5
+      gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.5);
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.start();
+      osc.stop(audioCtx.currentTime + 0.5);
+    } catch {}
+  };
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (!alerts || alerts.length === 0) return;
+      const now = new Date();
+      const nowTime = now.getHours().toString().padStart(2, '0') + ':' + now.getMinutes().toString().padStart(2, '0');
+      const todayStr = now.toISOString().split('T')[0];
+
+      alerts.forEach((alert) => {
+        if (alert.status === 'pending') {
+          const cleanTime = (alert.time || '').replace('.', ':');
+          const isDue = (alert.date < todayStr) || (alert.date === todayStr && cleanTime <= nowTime);
+          if (isDue) {
+            playChime();
+            setTriggeredPopup(alert);
+
+            if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
+              try {
+                new Notification(`FocusFlow Reminder: ${alert.title}`, {
+                  body: alert.description || `Scheduled for ${alert.time}`,
+                  icon: '/icon-192.png'
+                });
+              } catch {}
+            }
+
+            api.dismissAlert(alert.id).then(() => {
+              fetchAllData();
+            });
+          }
+        }
+      });
+    }, 5000);
+
+    return () => clearInterval(interval);
+  }, [alerts]);
 
   if (loadingAuth || showSplash) {
     return (
@@ -275,6 +330,33 @@ export default function App() {
                 <span>Add to Home Screen</span>
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* In-App Reminder Trigger Banner */}
+      {triggeredPopup && (
+        <div className="fixed top-5 inset-x-4 max-w-md mx-auto z-50 animate-in slide-in-from-top-4 duration-300">
+          <div className="p-4 rounded-2xl bg-zinc-900 border border-indigo-500/50 shadow-2xl shadow-indigo-500/20 flex items-start justify-between gap-3">
+            <div className="flex items-start gap-3">
+              <div className="p-2.5 rounded-xl bg-indigo-600/20 text-indigo-400 mt-0.5">
+                <Bell className="w-5 h-5 animate-bounce" />
+              </div>
+              <div>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-400">Scheduled Reminder</span>
+                <h4 className="text-sm font-bold text-white mt-0.5">{triggeredPopup.title}</h4>
+                {triggeredPopup.description && (
+                  <p className="text-xs text-zinc-400 mt-0.5">{triggeredPopup.description}</p>
+                )}
+                <span className="text-[11px] text-zinc-500 block mt-1">Due: {triggeredPopup.date} at {triggeredPopup.time}</span>
+              </div>
+            </div>
+            <button
+              onClick={() => setTriggeredPopup(null)}
+              className="px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shrink-0"
+            >
+              Dismiss
+            </button>
           </div>
         </div>
       )}

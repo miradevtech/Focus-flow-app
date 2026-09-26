@@ -121,7 +121,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({ goals, onRefresh, onOpenQu
             <h3 className="text-white font-medium text-lg">No goals set</h3>
             <p className="text-gray-400 text-sm">Set a goal and start making progress.</p>
             <button
-              onClick={onOpenQuickAdd}
+              onClick={handleOpenAdd}
               className="px-4 py-2 bg-indigo-600/20 text-indigo-400 border border-indigo-500/30 rounded-xl text-sm font-medium hover:bg-indigo-600/30 transition-all inline-block mt-2"
             >
               Create Goal

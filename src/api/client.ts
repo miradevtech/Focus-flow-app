@@ -422,6 +422,7 @@ export const api = {
     date: string;
     time: string;
     userTimezone?: string;
+    remindAtUtc?: string;
   }): Promise<Alert> {
     return request<Alert>('/api/alerts', {
       method: 'POST',
@@ -445,6 +446,17 @@ export const api = {
   async deleteAlert(id: string): Promise<{ success: boolean; id: string }> {
     return request<{ success: boolean; id: string }>(`/api/alerts/${id}`, {
       method: 'DELETE'
+    });
+  },
+
+  async getVapidKey(): Promise<{ publicKey: string }> {
+    return request<{ publicKey: string }>('/api/alerts/vapid-key');
+  },
+
+  async subscribePush(subscription: any): Promise<{ success: boolean; registeredDevices: number }> {
+    return request<{ success: boolean; registeredDevices: number }>('/api/alerts/subscribe', {
+      method: 'POST',
+      body: JSON.stringify({ subscription, userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : '' })
     });
   },
 

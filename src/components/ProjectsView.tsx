@@ -131,7 +131,7 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ projects, onRefresh,
             <h3 className="text-white font-medium text-lg">No projects yet</h3>
             <p className="text-gray-400 text-sm">Create a project to organize bigger plans.</p>
             <button
-              onClick={onOpenQuickAdd}
+              onClick={handleOpenAdd}
               className="px-4 py-2 bg-indigo-600/20 text-indigo-400 border border-indigo-500/30 rounded-xl text-sm font-medium hover:bg-indigo-600/30 transition-all inline-block mt-2"
             >
               Create Project
