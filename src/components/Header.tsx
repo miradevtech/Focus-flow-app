@@ -1,19 +1,18 @@
 import React from 'react';
 import { User, TabType } from '../types';
-import { Plus, Bell } from 'lucide-react';
+import { Bell } from 'lucide-react';
 import { Logo } from './Logo';
 
 interface HeaderProps {
   user: User;
   currentTab: TabType;
   onLogout: () => void;
-  onOpenQuickAdd: () => void;
+  onOpenQuickAdd?: () => void;
   onNavigate: (tab: TabType) => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
   currentTab,
-  onOpenQuickAdd,
   onNavigate
 }) => {
   const todayStr = new Date().toLocaleDateString('en-US', {
@@ -60,14 +59,6 @@ export const Header: React.FC<HeaderProps> = ({
       </div>
 
       <div className="flex items-center gap-2.5">
-        <button
-          onClick={onOpenQuickAdd}
-          className="flex items-center gap-1.5 px-3.5 py-2 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white font-medium rounded-xl shadow-lg shadow-blue-600/20 transition-all text-xs active:scale-95"
-        >
-          <Plus className="w-4 h-4" />
-          <span className="hidden sm:inline">New</span>
-        </button>
-
         <button
           onClick={() => onNavigate('alerts')}
           className="relative p-2.5 rounded-xl bg-zinc-900 border border-zinc-800 text-zinc-300 hover:text-white hover:bg-zinc-800 transition-all"

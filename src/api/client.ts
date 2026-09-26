@@ -43,7 +43,7 @@ export function setStoredApiBase(url: string): void {
 
 const API_BASE = getStoredApiBase();
 
-async function fetchWithRetry(url: string, options: RequestInit, retries = 1, timeoutMs = 35000): Promise<Response> {
+async function fetchWithRetry(url: string, options: RequestInit, retries = 0, timeoutMs = 4000): Promise<Response> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
 
@@ -57,8 +57,6 @@ async function fetchWithRetry(url: string, options: RequestInit, retries = 1, ti
   } catch (err) {
     clearTimeout(timer);
     if (retries > 0) {
-      // Wait 3 seconds for Render server to wake up from sleep mode
-      await new Promise((r) => setTimeout(r, 3000));
       return fetchWithRetry(url, options, retries - 1, timeoutMs);
     }
     throw err;
@@ -150,20 +148,32 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
       headers
     });
   } catch (err) {
-    console.warn(`Backend unreachable at ${url}. Falling back to offline local storage mode.`);
+    console.warn(`Backend unreachable at ${url}. Falling back to instant offline storage.`);
     return handleOfflineFallback<T>(endpoint, options);
   }
 
   if (!response.ok) {
-    let errorMsg = `Request failed: ${response.statusText}`;
-    try {
-      const data = await response.json();
-      if (data && data.error) errorMsg = data.error;
-    } catch {}
-    throw new Error(errorMsg);
+    console.warn(`API returned ${response.status} for ${endpoint}. Falling back to instant offline storage.`);
+    if (response.status === 401) {
+      setStoredToken(null);
+    }
+    return handleOfflineFallback<T>(endpoint, options);
   }
 
-  return response.json();
+  try {
+    const data = await response.json();
+    // Keep local cache synced
+    const parts = endpoint.split('?')[0].split('/').filter(Boolean);
+    const collectionName = parts[1];
+    if (collectionName && (!options.method || options.method === 'GET')) {
+      if (Array.isArray(data)) {
+        localStorage.setItem(`focusflow_offline_${collectionName}`, JSON.stringify(data));
+      }
+    }
+    return data;
+  } catch {
+    return handleOfflineFallback<T>(endpoint, options);
+  }
 }
 
 export const api = {

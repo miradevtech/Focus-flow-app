@@ -13,6 +13,7 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ projects, onRefresh,
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [viewingProject, setViewingProject] = useState<Project | null>(null);
   const [editingProject, setEditingProject] = useState<Project | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
 
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -43,8 +44,12 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ projects, onRefresh,
 
   const handleSaveProject = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title.trim()) return;
+    if (!title.trim()) {
+      alert('Please enter a project title.');
+      return;
+    }
 
+    setIsSaving(true);
     try {
       const formattedChecklist = checklist.map((c, i) => ({
         id: editingProject?.checklist?.[i]?.id || 'chk_' + Math.random().toString(36).substring(2, 9),
@@ -54,8 +59,8 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ projects, onRefresh,
 
       if (editingProject) {
         await api.updateProject(editingProject.id, {
-          title,
-          description,
+          title: title.trim(),
+          description: description.trim(),
           targetDate,
           status,
           color,
@@ -64,8 +69,8 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ projects, onRefresh,
         setEditingProject(null);
       } else {
         await api.createProject({
-          title,
-          description,
+          title: title.trim(),
+          description: description.trim(),
           targetDate,
           status,
           color,
@@ -76,6 +81,11 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ projects, onRefresh,
       onRefresh();
     } catch (err) {
       console.error(err);
+      setIsAddOpen(false);
+      setEditingProject(null);
+      onRefresh();
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -348,9 +358,17 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ projects, onRefresh,
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white py-3 rounded-xl font-medium text-sm shadow-lg shadow-indigo-500/20 transition-all"
+                  disabled={isSaving}
+                  className="flex-1 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 disabled:opacity-50 text-white py-3 rounded-xl font-medium text-sm shadow-lg shadow-indigo-500/20 transition-all flex items-center justify-center gap-2 active:scale-95"
                 >
-                  Done
+                  {isSaving ? (
+                    <>
+                      <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                      <span>Saving...</span>
+                    </>
+                  ) : (
+                    <span>Done</span>
+                  )}
                 </button>
               </div>
             </form>

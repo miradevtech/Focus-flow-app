@@ -14,6 +14,7 @@ export const NotesView: React.FC<NotesViewProps> = ({ notes, onRefresh, onOpenQu
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [viewingNote, setViewingNote] = useState<Note | null>(null);
   const [editingNote, setEditingNote] = useState<Note | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
 
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
@@ -35,21 +36,30 @@ export const NotesView: React.FC<NotesViewProps> = ({ notes, onRefresh, onOpenQu
 
   const handleSaveNote = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title.trim()) return;
+    if (!title.trim()) {
+      alert('Please enter a note title.');
+      return;
+    }
 
     const tags = tagsInput.split(',').map((t) => t.trim()).filter(Boolean);
 
+    setIsSaving(true);
     try {
       if (editingNote) {
-        await api.updateNote(editingNote.id, { title, content, tags });
+        await api.updateNote(editingNote.id, { title: title.trim(), content: content.trim(), tags });
         setEditingNote(null);
       } else {
-        await api.createNote({ title, content, tags });
+        await api.createNote({ title: title.trim(), content: content.trim(), tags });
         setIsAddOpen(false);
       }
       onRefresh();
     } catch (err) {
       console.error(err);
+      setIsAddOpen(false);
+      setEditingNote(null);
+      onRefresh();
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -231,9 +241,17 @@ export const NotesView: React.FC<NotesViewProps> = ({ notes, onRefresh, onOpenQu
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-sm font-medium shadow-lg shadow-blue-600/20"
+                  disabled={isSaving}
+                  className="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white rounded-xl text-sm font-medium shadow-lg shadow-blue-600/20 transition-all flex items-center gap-1.5 active:scale-95"
                 >
-                  {editingNote ? 'Save Changes' : 'Create Note'}
+                  {isSaving ? (
+                    <>
+                      <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                      <span>Saving...</span>
+                    </>
+                  ) : (
+                    <span>{editingNote ? 'Save Changes' : 'Create Note'}</span>
+                  )}
                 </button>
               </div>
             </form>

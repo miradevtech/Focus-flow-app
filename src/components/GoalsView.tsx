@@ -13,6 +13,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({ goals, onRefresh, onOpenQu
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [viewingGoal, setViewingGoal] = useState<Goal | null>(null);
   const [editingGoal, setEditingGoal] = useState<Goal | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
 
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -37,8 +38,12 @@ export const GoalsView: React.FC<GoalsViewProps> = ({ goals, onRefresh, onOpenQu
 
   const handleSaveGoal = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title.trim()) return;
+    if (!title.trim()) {
+      alert('Please enter a goal title.');
+      return;
+    }
 
+    setIsSaving(true);
     try {
       const formattedChecklist = checklist.map((c, i) => ({
         id: editingGoal?.checklist?.[i]?.id || 'chk_' + Math.random().toString(36).substring(2, 9),
@@ -48,16 +53,16 @@ export const GoalsView: React.FC<GoalsViewProps> = ({ goals, onRefresh, onOpenQu
 
       if (editingGoal) {
         await api.updateGoal(editingGoal.id, {
-          title,
-          description,
+          title: title.trim(),
+          description: description.trim(),
           targetDate,
           checklist: formattedChecklist
         });
         setEditingGoal(null);
       } else {
         await api.createGoal({
-          title,
-          description,
+          title: title.trim(),
+          description: description.trim(),
           targetDate,
           checklist: formattedChecklist
         });
@@ -66,6 +71,11 @@ export const GoalsView: React.FC<GoalsViewProps> = ({ goals, onRefresh, onOpenQu
       onRefresh();
     } catch (err) {
       console.error(err);
+      setIsAddOpen(false);
+      setEditingGoal(null);
+      onRefresh();
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -321,9 +331,17 @@ export const GoalsView: React.FC<GoalsViewProps> = ({ goals, onRefresh, onOpenQu
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white py-3 rounded-xl font-medium text-sm shadow-lg shadow-indigo-500/20 transition-all"
+                  disabled={isSaving}
+                  className="flex-1 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 disabled:opacity-50 text-white py-3 rounded-xl font-medium text-sm shadow-lg shadow-indigo-500/20 transition-all flex items-center justify-center gap-2 active:scale-95"
                 >
-                  Done
+                  {isSaving ? (
+                    <>
+                      <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                      <span>Saving...</span>
+                    </>
+                  ) : (
+                    <span>Done</span>
+                  )}
                 </button>
               </div>
             </form>

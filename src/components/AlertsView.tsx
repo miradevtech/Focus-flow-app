@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Alert, AlertStatus } from '../types';
 import { api } from '../api/client';
 import { Plus, Bell, Calendar, Clock, Trash2, Edit3, Eye, X, CheckCircle2 } from 'lucide-react';
+import { TimePicker24 } from './TimePicker24';
 
 interface AlertsViewProps {
   alerts: Alert[];
@@ -13,11 +14,12 @@ export const AlertsView: React.FC<AlertsViewProps> = ({ alerts, onRefresh }) => 
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [viewingAlert, setViewingAlert] = useState<Alert | null>(null);
   const [editingAlert, setEditingAlert] = useState<Alert | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
 
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
-  const [time, setTime] = useState('09:00');
+  const [time, setTime] = useState('18:07');
 
   const [notifPermission, setNotifPermission] = useState<NotificationPermission>(
     typeof window !== 'undefined' && 'Notification' in window ? Notification.permission : 'default'
@@ -27,7 +29,7 @@ export const AlertsView: React.FC<AlertsViewProps> = ({ alerts, onRefresh }) => 
     setTitle('');
     setDescription('');
     setDate(new Date().toISOString().split('T')[0]);
-    setTime('09:00');
+    setTime('18:07');
     setIsAddOpen(true);
   };
 
@@ -36,30 +38,43 @@ export const AlertsView: React.FC<AlertsViewProps> = ({ alerts, onRefresh }) => 
     setTitle(alert.title);
     setDescription(alert.description);
     setDate(alert.date);
-    setTime(alert.time);
+    setTime(alert.time ? alert.time.replace('.', ':') : '18:07');
   };
 
   const handleSaveAlert = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title.trim() || !date || !time) return;
+    if (!title.trim()) {
+      alert('Please enter a reminder title.');
+      return;
+    }
+    if (!date) {
+      alert('Please select a date.');
+      return;
+    }
+    if (!time) {
+      alert('Please select a time.');
+      return;
+    }
 
+    setIsSaving(true);
     try {
       const userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      const cleanTime = time.replace('.', ':');
       if (editingAlert) {
         await api.updateAlert(editingAlert.id, {
-          title,
-          description,
+          title: title.trim(),
+          description: description.trim(),
           date,
-          time,
+          time: cleanTime,
           userTimezone
         });
         setEditingAlert(null);
       } else {
         await api.createAlert({
-          title,
-          description,
+          title: title.trim(),
+          description: description.trim(),
           date,
-          time,
+          time: cleanTime,
           userTimezone
         });
         setIsAddOpen(false);
@@ -67,6 +82,11 @@ export const AlertsView: React.FC<AlertsViewProps> = ({ alerts, onRefresh }) => 
       onRefresh();
     } catch (err) {
       console.error(err);
+      setIsAddOpen(false);
+      setEditingAlert(null);
+      onRefresh();
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -130,7 +150,7 @@ export const AlertsView: React.FC<AlertsViewProps> = ({ alerts, onRefresh }) => 
           </button>
           <button
             onClick={handleOpenAdd}
-            className="flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-medium rounded-xl shadow-lg shadow-indigo-500/20 text-sm transition-all"
+            className="flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-medium rounded-xl shadow-lg shadow-indigo-500/20 text-sm transition-all active:scale-95"
           >
             <Plus className="w-4 h-4" />
             <span>Add Reminder</span>
@@ -244,30 +264,23 @@ export const AlertsView: React.FC<AlertsViewProps> = ({ alerts, onRefresh }) => 
                 />
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-medium text-zinc-400 mb-1">Date *</label>
-                  <input
-                    type="date"
-                    required
-                    value={date}
-                    onChange={(e) => setDate(e.target.value)}
-                    className="w-full px-4 py-2.5 bg-zinc-950 border border-zinc-800 rounded-xl text-white text-sm focus:outline-none focus:border-blue-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-zinc-400 mb-1">Time (24-hr) *</label>
-                  <input
-                    type="time"
-                    required
-                    step="60"
-                    lang="en-GB"
-                    value={time}
-                    onChange={(e) => setTime(e.target.value)}
-                    className="w-full px-4 py-2.5 bg-zinc-950 border border-zinc-800 rounded-xl text-white text-sm focus:outline-none focus:border-blue-500"
-                  />
-                </div>
+              <div>
+                <label className="block text-xs font-medium text-zinc-400 mb-1">Date *</label>
+                <input
+                  type="date"
+                  required
+                  value={date}
+                  onChange={(e) => setDate(e.target.value)}
+                  className="w-full px-4 py-2.5 bg-zinc-950 border border-zinc-800 rounded-xl text-white text-sm focus:outline-none focus:border-blue-500"
+                />
               </div>
+
+              {/* 24-Hour TimePicker */}
+              <TimePicker24
+                value={time}
+                onChange={setTime}
+                label="Alert Time (24-Hour Clock)"
+              />
 
               <div>
                 <label className="block text-xs font-medium text-zinc-400 mb-1">Description</label>
@@ -290,9 +303,17 @@ export const AlertsView: React.FC<AlertsViewProps> = ({ alerts, onRefresh }) => 
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2.5 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white text-xs font-semibold rounded-xl shadow-lg shadow-blue-600/20 transition-all"
+                  disabled={isSaving}
+                  className="px-5 py-2.5 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 disabled:opacity-50 text-white text-xs font-semibold rounded-xl shadow-lg shadow-blue-600/20 transition-all flex items-center gap-1.5"
                 >
-                  {editingAlert ? 'Save Changes' : 'Create Reminder'}
+                  {isSaving ? (
+                    <>
+                      <span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                      <span>Saving...</span>
+                    </>
+                  ) : (
+                    <span>{editingAlert ? 'Save Changes' : 'Create Reminder'}</span>
+                  )}
                 </button>
               </div>
             </form>

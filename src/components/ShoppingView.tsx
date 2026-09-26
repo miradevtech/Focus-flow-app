@@ -14,6 +14,7 @@ export const ShoppingView: React.FC<ShoppingViewProps> = ({ shoppingItems, onRef
   const [viewingItem, setViewingItem] = useState<ShoppingItem | null>(null);
   const [editingItem, setEditingItem] = useState<ShoppingItem | null>(null);
   const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
 
   // Form state matching IMG_9238.png
   const [name, setName] = useState('');
@@ -76,8 +77,12 @@ export const ShoppingView: React.FC<ShoppingViewProps> = ({ shoppingItems, onRef
 
   const handleSaveItem = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim()) return;
+    if (!name.trim()) {
+      alert('Please enter an item name.');
+      return;
+    }
 
+    setIsSaving(true);
     try {
       const formattedChecklist = checklist.map((c, i) => ({
         id: editingItem?.checklist?.[i]?.id || 'chk_' + Math.random().toString(36).substring(2, 9),
@@ -86,11 +91,11 @@ export const ShoppingView: React.FC<ShoppingViewProps> = ({ shoppingItems, onRef
       }));
 
       const payload = {
-        name,
+        name: name.trim(),
         quantity,
         price: price ? parseFloat(price) : null,
         category,
-        notes,
+        notes: notes.trim(),
         image: image || null,
         checklist: formattedChecklist
       };
@@ -105,6 +110,11 @@ export const ShoppingView: React.FC<ShoppingViewProps> = ({ shoppingItems, onRef
       onRefresh();
     } catch (err) {
       console.error(err);
+      setIsAddOpen(false);
+      setEditingItem(null);
+      onRefresh();
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -522,9 +532,17 @@ export const ShoppingView: React.FC<ShoppingViewProps> = ({ shoppingItems, onRef
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white py-3 rounded-xl font-medium text-sm shadow-lg shadow-indigo-500/20 transition-all"
+                  disabled={isSaving}
+                  className="flex-1 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 disabled:opacity-50 text-white py-3 rounded-xl font-medium text-sm shadow-lg shadow-indigo-500/20 transition-all flex items-center justify-center gap-2 active:scale-95"
                 >
-                  {editingItem ? 'Save Item' : 'Add Item'}
+                  {isSaving ? (
+                    <>
+                      <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                      <span>Saving...</span>
+                    </>
+                  ) : (
+                    <span>{editingItem ? 'Save Item' : 'Add Item'}</span>
+                  )}
                 </button>
               </div>
             </form>

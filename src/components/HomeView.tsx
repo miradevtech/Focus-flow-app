@@ -65,11 +65,11 @@ export const HomeView: React.FC<HomeViewProps> = ({
 
           <div className="flex flex-wrap items-center gap-3">
             <button
-              onClick={onOpenQuickAdd}
-              className="px-5 py-2.5 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white font-medium rounded-xl shadow-lg shadow-blue-600/25 text-sm transition-all flex items-center gap-2"
+              onClick={() => onNavigate('tasks')}
+              className="px-5 py-2.5 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white font-medium rounded-xl shadow-lg shadow-blue-600/25 text-sm transition-all flex items-center gap-2 active:scale-95"
             >
-              <Plus className="w-4 h-4" />
-              <span>Quick Create</span>
+              <CheckSquare className="w-4 h-4" />
+              <span>Go to Tasks</span>
             </button>
             <button
               onClick={() => onNavigate('tasks')}

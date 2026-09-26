@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Task, Priority, ChecklistItem } from '../types';
 import { api } from '../api/client';
 import { Plus, Search, CheckCircle2, Clock, Trash2, Edit3, Eye, X } from 'lucide-react';
+import { TimePicker24 } from './TimePicker24';
 
 interface TasksViewProps {
   tasks: Task[];
@@ -17,12 +18,13 @@ export const TasksView: React.FC<TasksViewProps> = ({ tasks, onRefresh, onOpenQu
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [viewingTask, setViewingTask] = useState<Task | null>(null);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
 
   // Form state for Add/Edit
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [dueDate, setDueDate] = useState(new Date().toISOString().split('T')[0]);
-  const [dueTime, setDueTime] = useState('');
+  const [dueTime, setDueTime] = useState('18:07');
   const [priority, setPriority] = useState<Priority>('medium');
   const [category, setCategory] = useState('General');
   const [checklist, setChecklist] = useState<Array<{ title: string; completed: boolean }>>([]);
@@ -51,8 +53,12 @@ export const TasksView: React.FC<TasksViewProps> = ({ tasks, onRefresh, onOpenQu
 
   const handleSaveTask = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title.trim()) return;
+    if (!title.trim()) {
+      alert('Please enter a task title.');
+      return;
+    }
 
+    setIsSaving(true);
     try {
       const formattedChecklist = checklist.map((c, i) => ({
         id: editingTask?.checklist?.[i]?.id || 'chk_' + Math.random().toString(36).substring(2, 9),
@@ -60,12 +66,14 @@ export const TasksView: React.FC<TasksViewProps> = ({ tasks, onRefresh, onOpenQu
         completed: c.completed
       }));
 
+      const cleanDueTime = dueTime ? dueTime.replace('.', ':') : '';
+
       if (editingTask) {
         await api.updateTask(editingTask.id, {
-          title,
-          description,
+          title: title.trim(),
+          description: description.trim(),
           dueDate,
-          dueTime,
+          dueTime: cleanDueTime,
           priority,
           category,
           checklist: formattedChecklist
@@ -73,10 +81,10 @@ export const TasksView: React.FC<TasksViewProps> = ({ tasks, onRefresh, onOpenQu
         setEditingTask(null);
       } else {
         await api.createTask({
-          title,
-          description,
+          title: title.trim(),
+          description: description.trim(),
           dueDate,
-          dueTime,
+          dueTime: cleanDueTime,
           priority,
           category,
           checklist: formattedChecklist
@@ -86,6 +94,11 @@ export const TasksView: React.FC<TasksViewProps> = ({ tasks, onRefresh, onOpenQu
       onRefresh();
     } catch (err) {
       console.error(err);
+      setIsAddOpen(false);
+      setEditingTask(null);
+      onRefresh();
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -347,7 +360,7 @@ export const TasksView: React.FC<TasksViewProps> = ({ tasks, onRefresh, onOpenQu
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Due Date</label>
                   <input
@@ -358,14 +371,10 @@ export const TasksView: React.FC<TasksViewProps> = ({ tasks, onRefresh, onOpenQu
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Due Time (24-hr)</label>
-                  <input
-                    type="time"
-                    step="60"
-                    lang="en-GB"
-                    value={dueTime}
-                    onChange={(e) => setDueTime(e.target.value)}
-                    className="w-full bg-[#1A1D29] border border-[#2A2E3D] rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-indigo-500"
+                  <TimePicker24
+                    value={dueTime || '18:07'}
+                    onChange={setDueTime}
+                    label="Due Time (24-Hour Clock)"
                   />
                 </div>
               </div>
@@ -451,9 +460,17 @@ export const TasksView: React.FC<TasksViewProps> = ({ tasks, onRefresh, onOpenQu
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white py-3 rounded-xl font-medium text-sm shadow-lg shadow-indigo-500/20 transition-all"
+                  disabled={isSaving}
+                  className="flex-1 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 disabled:opacity-50 text-white py-3 rounded-xl font-medium text-sm shadow-lg shadow-indigo-500/20 transition-all flex items-center justify-center gap-2 active:scale-95"
                 >
-                  Done
+                  {isSaving ? (
+                    <>
+                      <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                      <span>Saving...</span>
+                    </>
+                  ) : (
+                    <span>Done</span>
+                  )}
                 </button>
               </div>
             </form>
