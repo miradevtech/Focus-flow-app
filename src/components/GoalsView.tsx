@@ -9,7 +9,7 @@ interface GoalsViewProps {
   onOpenQuickAdd: () => void;
 }
 
-export const GoalsView: React.FC<GoalsViewProps> = ({ goals, onRefresh }) => {
+export const GoalsView: React.FC<GoalsViewProps> = ({ goals, onRefresh, onOpenQuickAdd }) => {
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [viewingGoal, setViewingGoal] = useState<Goal | null>(null);
   const [editingGoal, setEditingGoal] = useState<Goal | null>(null);

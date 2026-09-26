@@ -9,7 +9,7 @@ interface NotesViewProps {
   onOpenQuickAdd: () => void;
 }
 
-export const NotesView: React.FC<NotesViewProps> = ({ notes, onRefresh }) => {
+export const NotesView: React.FC<NotesViewProps> = ({ notes, onRefresh, onOpenQuickAdd }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [viewingNote, setViewingNote] = useState<Note | null>(null);

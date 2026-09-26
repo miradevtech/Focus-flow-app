@@ -9,7 +9,7 @@ interface TasksViewProps {
   onOpenQuickAdd: () => void;
 }
 
-export const TasksView: React.FC<TasksViewProps> = ({ tasks, onRefresh }) => {
+export const TasksView: React.FC<TasksViewProps> = ({ tasks, onRefresh, onOpenQuickAdd }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterPriority, setFilterPriority] = useState<string>('all');
   const [filterStatus, setFilterStatus] = useState<string>('all');

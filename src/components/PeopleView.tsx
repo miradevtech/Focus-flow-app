@@ -9,7 +9,7 @@ interface PeopleViewProps {
   onOpenQuickAdd: () => void;
 }
 
-export const PeopleView: React.FC<PeopleViewProps> = ({ people, onRefresh }) => {
+export const PeopleView: React.FC<PeopleViewProps> = ({ people, onRefresh, onOpenQuickAdd }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [viewingPerson, setViewingPerson] = useState<Person | null>(null);

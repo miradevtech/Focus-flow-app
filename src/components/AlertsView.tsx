@@ -9,7 +9,7 @@ interface AlertsViewProps {
   onOpenQuickAdd: () => void;
 }
 
-export const AlertsView: React.FC<AlertsViewProps> = ({ alerts, onRefresh }) => {
+export const AlertsView: React.FC<AlertsViewProps> = ({ alerts, onRefresh, onOpenQuickAdd }) => {
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [viewingAlert, setViewingAlert] = useState<Alert | null>(null);
   const [editingAlert, setEditingAlert] = useState<Alert | null>(null);

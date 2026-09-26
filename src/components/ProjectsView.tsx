@@ -9,7 +9,7 @@ interface ProjectsViewProps {
   onOpenQuickAdd: () => void;
 }
 
-export const ProjectsView: React.FC<ProjectsViewProps> = ({ projects, onRefresh }) => {
+export const ProjectsView: React.FC<ProjectsViewProps> = ({ projects, onRefresh, onOpenQuickAdd }) => {
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [viewingProject, setViewingProject] = useState<Project | null>(null);
   const [editingProject, setEditingProject] = useState<Project | null>(null);

@@ -9,7 +9,7 @@ interface ShoppingViewProps {
   onOpenQuickAdd: () => void;
 }
 
-export const ShoppingView: React.FC<ShoppingViewProps> = ({ shoppingItems, onRefresh }) => {
+export const ShoppingView: React.FC<ShoppingViewProps> = ({ shoppingItems, onRefresh, onOpenQuickAdd }) => {
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [viewingItem, setViewingItem] = useState<ShoppingItem | null>(null);
   const [editingItem, setEditingItem] = useState<ShoppingItem | null>(null);
