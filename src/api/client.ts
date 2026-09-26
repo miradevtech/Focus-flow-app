@@ -25,7 +25,112 @@ export function setStoredToken(token: string | null): void {
   }
 }
 
-const API_BASE = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '');
+const API_KEY_BASE = 'focusflow_custom_api_base';
+
+export function getStoredApiBase(): string {
+  const stored = localStorage.getItem(API_KEY_BASE);
+  if (stored) return stored.replace(/\/$/, '');
+  return (import.meta.env.VITE_API_URL || '').replace(/\/$/, '');
+}
+
+export function setStoredApiBase(url: string): void {
+  if (url) {
+    localStorage.setItem(API_KEY_BASE, url.replace(/\/$/, ''));
+  } else {
+    localStorage.removeItem(API_KEY_BASE);
+  }
+}
+
+const API_BASE = getStoredApiBase();
+
+async function fetchWithRetry(url: string, options: RequestInit, retries = 1, timeoutMs = 35000): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const res = await fetch(url, {
+      ...options,
+      signal: controller.signal
+    });
+    clearTimeout(timer);
+    return res;
+  } catch (err) {
+    clearTimeout(timer);
+    if (retries > 0) {
+      // Wait 3 seconds for Render server to wake up from sleep mode
+      await new Promise((r) => setTimeout(r, 3000));
+      return fetchWithRetry(url, options, retries - 1, timeoutMs);
+    }
+    throw err;
+  }
+}
+
+function handleOfflineFallback<T>(endpoint: string, options: RequestInit): T {
+  const method = (options.method || 'GET').toUpperCase();
+  const body = options.body ? JSON.parse(options.body as string) : null;
+
+  if (endpoint.includes('/api/auth/guest') || endpoint.includes('/api/auth/login')) {
+    return {
+      user: { id: 'usr_offline', name: 'FocusFlow User', email: 'guest@focusflow.local' },
+      token: 'offline_token'
+    } as unknown as T;
+  }
+
+  if (endpoint.includes('/api/auth/me')) {
+    return {
+      user: { id: 'usr_offline', name: 'FocusFlow User', email: 'guest@focusflow.local' }
+    } as unknown as T;
+  }
+
+  const parts = endpoint.split('?')[0].split('/').filter(Boolean);
+  const collectionName = parts[1] || 'generic';
+  const itemId = parts[2];
+  const storageKey = `focusflow_offline_${collectionName}`;
+
+  const existingData = JSON.parse(localStorage.getItem(storageKey) || '[]');
+
+  if (method === 'GET') {
+    if (itemId) {
+      const item = existingData.find((i: any) => i.id === itemId);
+      return (item || null) as unknown as T;
+    }
+    return existingData as unknown as T;
+  }
+
+  if (method === 'POST') {
+    const newItem = {
+      id: 'id_' + Math.random().toString(36).substring(2, 9),
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      completed: false,
+      status: 'active',
+      ...body
+    };
+    existingData.unshift(newItem);
+    localStorage.setItem(storageKey, JSON.stringify(existingData));
+    return newItem as unknown as T;
+  }
+
+  if (method === 'PUT' || method === 'PATCH') {
+    const updatedData = existingData.map((item: any) => {
+      if (item.id === itemId) {
+        return { ...item, ...body, updatedAt: new Date().toISOString() };
+      }
+      return item;
+    });
+    localStorage.setItem(storageKey, JSON.stringify(updatedData));
+    const updatedItem = updatedData.find((i: any) => i.id === itemId) || { id: itemId, ...body };
+    return updatedItem as unknown as T;
+  }
+
+  if (method === 'DELETE') {
+    const filtered = existingData.filter((item: any) => item.id !== itemId);
+    localStorage.setItem(storageKey, JSON.stringify(filtered));
+    return { success: true, id: itemId } as unknown as T;
+  }
+
+  return ([] as unknown) as T;
+}
 
 async function request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
   const token = getStoredToken();
@@ -38,10 +143,16 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
 
   const url = endpoint.startsWith('http') ? endpoint : `${API_BASE}${endpoint}`;
 
-  const response = await fetch(url, {
-    ...options,
-    headers
-  });
+  let response: Response;
+  try {
+    response = await fetchWithRetry(url, {
+      ...options,
+      headers
+    });
+  } catch (err) {
+    console.warn(`Backend unreachable at ${url}. Falling back to offline local storage mode.`);
+    return handleOfflineFallback<T>(endpoint, options);
+  }
 
   if (!response.ok) {
     let errorMsg = `Request failed: ${response.statusText}`;

@@ -1,6 +1,6 @@
 import React from 'react';
 import { User, TabType } from '../types';
-import { Plus, Bell } from 'lucide-react';
+import { Plus, Bell, Settings } from 'lucide-react';
 import { Logo } from './Logo';
 
 interface HeaderProps {
@@ -9,12 +9,14 @@ interface HeaderProps {
   onLogout: () => void;
   onOpenQuickAdd: () => void;
   onNavigate: (tab: TabType) => void;
+  onOpenSettings: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
   currentTab,
   onOpenQuickAdd,
-  onNavigate
+  onNavigate,
+  onOpenSettings
 }) => {
   const todayStr = new Date().toLocaleDateString('en-US', {
     weekday: 'long',
@@ -75,6 +77,14 @@ export const Header: React.FC<HeaderProps> = ({
         >
           <Bell className="w-4 h-4" />
           <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
+        </button>
+
+        <button
+          onClick={onOpenSettings}
+          className="p-2.5 rounded-xl bg-zinc-900 border border-zinc-800 text-zinc-300 hover:text-white hover:bg-zinc-800 transition-all"
+          title="Backend Connection Settings"
+        >
+          <Settings className="w-4 h-4" />
         </button>
       </div>
     </header>
