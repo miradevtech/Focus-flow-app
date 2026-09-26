@@ -472,6 +472,12 @@ export const api = {
     });
   },
 
+  async sendTestPush(): Promise<{ success: boolean; deliveredDevices: number; totalDevices: number }> {
+    return request<{ success: boolean; deliveredDevices: number; totalDevices: number }>('/api/alerts/test-push', {
+      method: 'POST'
+    });
+  },
+
   async getVapidPublicKey(): Promise<string> {
     const res = await request<{ publicKey: string }>('/api/alerts/vapid-key');
     return res.publicKey;

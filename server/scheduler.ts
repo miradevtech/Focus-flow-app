@@ -110,7 +110,10 @@ async function processDueAlert(alert: Alert) {
         }
       };
 
-      await webpush.sendNotification(pushConfig, payload);
+      await webpush.sendNotification(pushConfig, payload, {
+        TTL: 86400,
+        urgency: 'high'
+      });
       deliveredCount++;
     } catch (err: any) {
       failedCount++;

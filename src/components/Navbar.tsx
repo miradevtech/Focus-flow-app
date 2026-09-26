@@ -73,8 +73,8 @@ export const Navbar: React.FC<NavbarProps> = ({ currentTab, onSelectTab }) => {
       </aside>
 
       {/* Mobile & Tablet Bottom Navigation */}
-      <nav className="lg:hidden fixed bottom-0 inset-x-0 z-40 bg-zinc-950/95 backdrop-blur-xl border-t border-zinc-900/80 px-1 py-1.5 shadow-2xl pb-safe">
-        <div className="flex items-center justify-between max-w-lg mx-auto overflow-x-auto no-scrollbar gap-0.5 px-1">
+      <nav className="lg:hidden fixed bottom-0 inset-x-0 z-40 bg-zinc-950/95 backdrop-blur-xl border-t border-zinc-900/80 px-2 pt-2 shadow-2xl safe-bottom-bar">
+        <div className="flex items-center justify-between max-w-lg mx-auto overflow-x-auto no-scrollbar gap-1 px-1">
           {navItems.map((item) => {
             const Icon = item.icon;
             const isActive = currentTab === item.id;
@@ -82,12 +82,12 @@ export const Navbar: React.FC<NavbarProps> = ({ currentTab, onSelectTab }) => {
               <button
                 key={item.id}
                 onClick={() => onSelectTab(item.id)}
-                className={`flex flex-col items-center justify-center min-w-[36px] flex-1 py-1 px-0.5 rounded-lg transition-all ${
-                  isActive ? 'text-blue-400 bg-blue-600/10' : 'text-zinc-400 hover:text-zinc-200'
+                className={`flex flex-col items-center justify-center min-w-[40px] flex-1 py-1 px-0.5 rounded-xl transition-all ${
+                  isActive ? 'text-indigo-400 bg-indigo-600/15 font-semibold' : 'text-zinc-400 hover:text-zinc-200'
                 }`}
               >
-                <Icon className="w-4 h-4 mb-0.5" />
-                <span className="text-[9px] font-medium tracking-tighter truncate w-full text-center">
+                <Icon className={`w-4 h-4 mb-0.5 ${isActive ? 'text-indigo-400' : 'text-zinc-400'}`} />
+                <span className="text-[9px] sm:text-[10px] font-medium tracking-tight truncate w-full text-center">
                   {item.label}
                 </span>
               </button>

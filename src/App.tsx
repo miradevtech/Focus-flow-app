@@ -26,6 +26,7 @@ import { PeopleView } from './components/PeopleView';
 import { HistoryView } from './components/HistoryView';
 import { Logo } from './components/Logo';
 import { Smartphone, X, Download, Bell } from 'lucide-react';
+import { registerPushDevice, requestAndRegisterNotifications } from './utils/pushNotifications';
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -139,6 +140,28 @@ export default function App() {
       setUser(res.user);
       fetchAllData();
     });
+  };
+
+  // Automatically register device push subscription when user is loaded & permission is granted
+  useEffect(() => {
+    if (user && typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
+      registerPushDevice().catch(() => {});
+    }
+  }, [user]);
+
+  const [showPushBanner, setShowPushBanner] = useState<boolean>(() => {
+    if (typeof window === 'undefined' || !('Notification' in window)) return false;
+    const dismissed = sessionStorage.getItem('ff_dismiss_push_banner');
+    return Notification.permission === 'default' && !dismissed;
+  });
+
+  const handleEnablePushBanner = async () => {
+    const res = await requestAndRegisterNotifications();
+    setShowPushBanner(false);
+    sessionStorage.setItem('ff_dismiss_push_banner', 'true');
+    if (res.permission === 'granted') {
+      alert('✅ Background Push notifications activated! You will receive scheduled reminders even when FocusFlow is closed.');
+    }
   };
 
   const handleToggleTask = async (id: string, completed: boolean) => {
@@ -305,7 +328,38 @@ export default function App() {
           onNavigate={setCurrentTab}
         />
 
-        <main className="flex-1 p-4 sm:p-8 max-w-7xl w-full mx-auto overflow-y-auto">
+        {/* Global Web Push Banner if not yet enabled */}
+        {showPushBanner && (
+          <div className="bg-indigo-950/80 border-b border-indigo-500/30 px-4 py-2.5 flex items-center justify-between gap-3 text-xs text-indigo-200">
+            <div className="flex items-center gap-2.5">
+              <span className="p-1 rounded-lg bg-indigo-600/30 text-indigo-300">
+                <Bell className="w-3.5 h-3.5 animate-pulse" />
+              </span>
+              <span>
+                <strong>Enable Background Alerts:</strong> Receive scheduled reminders even when FocusFlow is closed or your phone is locked.
+              </span>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                onClick={handleEnablePushBanner}
+                className="px-2.5 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-[11px] transition-all"
+              >
+                Enable
+              </button>
+              <button
+                onClick={() => {
+                  setShowPushBanner(false);
+                  sessionStorage.setItem('ff_dismiss_push_banner', 'true');
+                }}
+                className="p-1 rounded-lg hover:bg-indigo-900/50 text-indigo-300"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+        )}
+
+        <main className="flex-1 p-4 sm:p-8 max-w-7xl w-full mx-auto overflow-y-auto pb-36 lg:pb-8">
           {currentTab === 'home' && (
             <HomeView
               tasks={tasks}
@@ -400,8 +454,8 @@ export default function App() {
 
       {/* In-App Reminder Trigger Banner */}
       {triggeredPopup && (
-        <div className="fixed top-5 inset-x-4 max-w-md mx-auto z-50 animate-in slide-in-from-top-4 duration-300">
-          <div className="p-4 rounded-2xl bg-zinc-900 border border-indigo-500/50 shadow-2xl shadow-indigo-500/20 flex items-start justify-between gap-3">
+        <div className="fixed inset-x-4 max-w-md mx-auto z-50 animate-in slide-in-from-top-4 duration-300 safe-top-banner">
+          <div className="p-4 rounded-2xl bg-zinc-900/95 backdrop-blur-xl border border-indigo-500/50 shadow-2xl shadow-indigo-500/25 flex items-start justify-between gap-3">
             <div className="flex items-start gap-3">
               <div className="p-2.5 rounded-xl bg-indigo-600/20 text-indigo-400 mt-0.5">
                 <Bell className="w-5 h-5 animate-bounce" />
@@ -417,7 +471,7 @@ export default function App() {
             </div>
             <button
               onClick={() => setTriggeredPopup(null)}
-              className="px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shrink-0"
+              className="px-3.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shrink-0 transition-all shadow-md shadow-indigo-600/30"
             >
               Dismiss
             </button>

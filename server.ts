@@ -1,6 +1,7 @@
 import express from 'express';
 import path from 'path';
 import fs from 'fs';
+import webpush from 'web-push';
 import { createServer as createViteServer } from 'vite';
 import {
   getDb,
@@ -914,17 +915,27 @@ async function main() {
 
   // Register push subscription
   app.post('/api/alerts/subscribe', requireAuth, (req: AuthenticatedRequest, res) => {
-    const { subscription, userAgent } = req.body;
-    if (!subscription || !subscription.endpoint || !subscription.keys) {
+    let { subscription, userAgent } = req.body;
+    if (!subscription && req.body.endpoint) {
+      subscription = req.body;
+    }
+    if (typeof subscription === 'string') {
+      try {
+        subscription = JSON.parse(subscription);
+      } catch {}
+    }
+
+    if (!subscription || !subscription.endpoint || !subscription.keys || !subscription.keys.p256dh || !subscription.keys.auth) {
       return res.status(400).json({ error: 'Invalid push subscription payload.' });
     }
 
     const db = getDb();
     const existing = db.pushSubscriptions.find(
-      (s) => s.endpoint === subscription.endpoint && s.userId === req.user!.id
+      (s) => s.endpoint === subscription.endpoint
     );
 
     if (existing) {
+      existing.userId = req.user!.id;
       existing.keys = subscription.keys;
       existing.userAgent = userAgent || existing.userAgent;
     } else {
@@ -942,11 +953,58 @@ async function main() {
 
     addSchedulerLog({
       type: 'info',
-      message: `Device push subscription registered for user ${req.user!.email}`,
+      message: `Device push subscription active for user ${req.user!.email}`,
       userId: req.user!.id
     });
 
-    res.json({ success: true, registeredDevices: db.pushSubscriptions.filter(s => s.userId === req.user!.id).length });
+    res.json({
+      success: true,
+      registeredDevices: db.pushSubscriptions.filter((s) => s.userId === req.user!.id).length
+    });
+  });
+
+  // Test push notification dispatch immediately
+  app.post('/api/alerts/test-push', requireAuth, async (req: AuthenticatedRequest, res) => {
+    const db = getDb();
+    const userSubs = db.pushSubscriptions.filter((s) => s.userId === req.user!.id);
+    if (userSubs.length === 0) {
+      return res.status(400).json({
+        error: 'No active push device registered for your account. Please enable notifications first.'
+      });
+    }
+
+    const payload = JSON.stringify({
+      title: 'FocusFlow Alert: Test Notification',
+      body: '🎉 Background Push is active! You will receive scheduled reminders even when the app is closed or your phone is locked.',
+      icon: '/icon-192.png',
+      badge: '/icon-192.png',
+      data: { url: '/?tab=alerts' }
+    });
+
+    let delivered = 0;
+    for (const sub of userSubs) {
+      try {
+        await webpush.sendNotification({
+          endpoint: sub.endpoint,
+          keys: {
+            p256dh: sub.keys.p256dh,
+            auth: sub.keys.auth
+          }
+        }, payload, {
+          TTL: 86400,
+          urgency: 'high'
+        });
+        delivered++;
+      } catch (err: any) {
+        console.warn('Test push delivery failed:', err?.message || err);
+      }
+    }
+
+    res.json({
+      success: true,
+      deliveredDevices: delivered,
+      totalDevices: userSubs.length
+    });
   });
 
   // Scheduler & Push Diagnostics

@@ -29,12 +29,11 @@ self.addEventListener('push', (event) => {
     body: data.body,
     icon: data.icon || '/icon-192.png',
     badge: data.badge || '/icon-192.png',
-    vibrate: [200, 100, 200, 100, 400],
-    data: data.data || { url: '/?tab=alerts' },
-    actions: [
-      { action: 'open', title: 'Open FocusFlow' },
-      { action: 'dismiss', title: 'Dismiss' }
-    ]
+    tag: (data.data && data.data.alertId) ? `alert-${data.data.alertId}` : `alert-${Date.now()}`,
+    renotify: true,
+    requireInteraction: true,
+    vibrate: [300, 100, 300, 100, 400],
+    data: data.data || { url: '/?tab=alerts' }
   };
 
   event.waitUntil(
@@ -48,12 +47,11 @@ self.addEventListener('message', (event) => {
       body: event.data.body || 'You have an active scheduled reminder.',
       icon: '/icon-192.png',
       badge: '/icon-192.png',
-      vibrate: [200, 100, 200, 100, 400],
-      data: { url: '/?tab=alerts' },
-      actions: [
-        { action: 'open', title: 'Open FocusFlow' },
-        { action: 'dismiss', title: 'Dismiss' }
-      ]
+      tag: `inapp-${Date.now()}`,
+      renotify: true,
+      requireInteraction: true,
+      vibrate: [300, 100, 300, 100, 400],
+      data: { url: '/?tab=alerts' }
     };
 
     event.waitUntil(
@@ -75,7 +73,9 @@ self.addEventListener('notificationclick', (event) => {
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
       for (const client of clientList) {
         if ('focus' in client) {
-          client.navigate(targetUrl);
+          if ('navigate' in client) {
+            client.navigate(targetUrl);
+          }
           return client.focus();
         }
       }

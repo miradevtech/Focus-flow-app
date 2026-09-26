@@ -3,6 +3,7 @@ import { Alert, AlertStatus } from '../types';
 import { api } from '../api/client';
 import { Plus, Bell, Calendar, Clock, Trash2, Edit3, Eye, X, CheckCircle2 } from 'lucide-react';
 import { TimePicker24 } from './TimePicker24';
+import { registerPushDevice, requestAndRegisterNotifications } from '../utils/pushNotifications';
 
 interface AlertsViewProps {
   alerts: Alert[];
@@ -177,85 +178,90 @@ export const AlertsView: React.FC<AlertsViewProps> = ({ alerts, onRefresh }) => 
     alert('🔊 Sound played & test notification dispatched!');
   };
 
-  const handleEnableNotifications = async () => {
-    if ('Notification' in window) {
-      const permission = await Notification.requestPermission();
-      setNotifPermission(permission);
-      if (permission === 'granted') {
-        new Notification('FocusFlow Notifications Enabled', {
-          body: 'You will now receive scheduled reminders and alert notifications!',
-          icon: '/icon-192.png'
-        });
+  const [isSendingPush, setIsSendingPush] = useState(false);
+  const isIOS = typeof window !== 'undefined' && /iphone|ipad|ipod/.test(window.navigator.userAgent.toLowerCase());
+  const isStandalone = typeof window !== 'undefined' && (window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone === true);
 
-        // Register push subscription with server
-        try {
-          if ('serviceWorker' in navigator) {
-            let reg = await navigator.serviceWorker.getRegistration();
-            if (!reg) {
-              reg = await navigator.serviceWorker.register('/sw.js');
-            }
-            await navigator.serviceWorker.ready;
-            const { publicKey } = await api.getVapidKey();
-            if (publicKey && reg.pushManager) {
-              const padding = '='.repeat((4 - (publicKey.length % 4)) % 4);
-              const base64 = (publicKey + padding).replace(/-/g, '+').replace(/_/g, '/');
-              const rawData = window.atob(base64);
-              const appServerKey = new Uint8Array(rawData.length);
-              for (let i = 0; i < rawData.length; ++i) {
-                appServerKey[i] = rawData.charCodeAt(i);
-              }
-              const sub = await reg.pushManager.subscribe({
-                userVisibleOnly: true,
-                applicationServerKey: appServerKey
-              });
-              await api.subscribePush(sub);
-            }
-          }
-        } catch (e) {
-          console.warn('Push registration skipped or failed:', e);
-        }
-        alert('Notifications are active! Scheduled alerts will sound and notify you.');
-      } else {
-        alert('Notification permission was denied or dismissed. Please enable notifications in your browser settings.');
-      }
-    } else {
-      alert('Browser notifications are not supported in this browser. In-app alerts and sounds will still notify you!');
+  const handleEnableNotifications = async () => {
+    const res = await requestAndRegisterNotifications();
+    setNotifPermission(res.permission);
+    if (res.permission === 'granted') {
+      alert('✅ Background Push notifications activated! Scheduled reminders will notify you even when FocusFlow is closed.');
+    } else if (res.permission === 'denied') {
+      alert('Notification permission was denied. Please allow notifications in your browser or phone site settings.');
+    }
+  };
+
+  const handleSendTestPush = async () => {
+    setIsSendingPush(true);
+    try {
+      await registerPushDevice();
+      const result = await api.sendTestPush();
+      alert(`📲 Real push notification sent to ${result.deliveredDevices} device(s)! Lock your phone or switch apps to see it appear.`);
+    } catch (err: any) {
+      alert(`Could not send push: ${err?.message || 'Tap "Enable Push" first.'}`);
+    } finally {
+      setIsSendingPush(false);
     }
   };
 
   return (
     <div className="space-y-6 pb-12">
+      {/* iOS Safari Home Screen Notice if needed */}
+      {isIOS && !isStandalone && (
+        <div className="p-3.5 rounded-2xl bg-indigo-950/40 border border-indigo-500/30 flex items-start gap-3">
+          <div className="p-2 rounded-xl bg-indigo-600/20 text-indigo-400 mt-0.5">
+            <Bell className="w-4 h-4" />
+          </div>
+          <div className="text-xs text-zinc-300 space-y-1">
+            <span className="font-semibold text-white block">iPhone Lock-Screen Alerts Notice</span>
+            <p className="text-zinc-400">
+              Apple requires web apps to be added to the home screen to wake your locked screen.
+              Tap Safari's <strong className="text-white">Share button</strong> (square with arrow up), then tap <strong className="text-white">'Add to Home Screen'</strong>.
+            </p>
+          </div>
+        </div>
+      )}
+
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h2 className="text-xl font-bold text-white tracking-tight">Alerts & Reminders</h2>
-          <p className="text-xs text-zinc-400 mt-0.5">Scheduled notifications and important event alerts.</p>
+          <p className="text-xs text-zinc-400 mt-0.5">Scheduled notifications and background reminders.</p>
         </div>
-        <div className="flex items-center gap-3 flex-wrap">
+        <div className="flex items-center gap-2.5 flex-wrap">
           {/* Web Push Status Indicator */}
           <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-zinc-900 border border-zinc-800 text-xs font-medium">
             <span className={`w-2 h-2 rounded-full ${notifPermission === 'granted' ? 'bg-emerald-500 animate-pulse' : notifPermission === 'denied' ? 'bg-red-500' : 'bg-amber-500'}`} />
             <span className="text-zinc-300">
-              {notifPermission === 'granted' ? 'Web Push Active & Running' : notifPermission === 'denied' ? 'Notifications Blocked' : 'Notifications Inactive'}
+              {notifPermission === 'granted' ? 'Push Active' : notifPermission === 'denied' ? 'Blocked' : 'Push Inactive'}
             </span>
           </div>
 
           <button
             onClick={handleEnableNotifications}
-            className="flex items-center justify-center gap-2 px-3.5 py-2.5 bg-zinc-900 border border-zinc-800 hover:border-zinc-700 text-zinc-200 font-medium rounded-xl text-xs sm:text-sm transition-all active:scale-95"
+            className="flex items-center justify-center gap-1.5 px-3 py-2 bg-zinc-900 border border-zinc-800 hover:border-zinc-700 text-zinc-200 font-medium rounded-xl text-xs transition-all active:scale-95"
           >
-            <Bell className="w-4 h-4 text-indigo-400" />
+            <Bell className="w-3.5 h-3.5 text-indigo-400" />
             <span>Enable Push</span>
           </button>
           <button
-            onClick={handleTestAlert}
-            className="flex items-center justify-center gap-2 px-3.5 py-2.5 bg-zinc-900 border border-indigo-500/30 hover:border-indigo-500 text-indigo-300 font-medium rounded-xl text-xs sm:text-sm transition-all active:scale-95"
-            title="Test sound and notification immediately"
+            onClick={handleSendTestPush}
+            disabled={isSendingPush}
+            className="flex items-center justify-center gap-1.5 px-3 py-2 bg-indigo-950/40 border border-indigo-500/40 hover:border-indigo-400 text-indigo-200 font-medium rounded-xl text-xs transition-all active:scale-95 disabled:opacity-50"
+            title="Send real background push to test phone lockscreen"
           >
-            <span>🔊 Test Alert</span>
+            <span>{isSendingPush ? 'Sending...' : '📲 Send Test Push'}</span>
+          </button>
+          <button
+            onClick={handleTestAlert}
+            className="flex items-center justify-center gap-1.5 px-3 py-2 bg-zinc-900 border border-zinc-800 hover:border-zinc-700 text-zinc-300 font-medium rounded-xl text-xs transition-all active:scale-95"
+            title="Test sound and in-app banner immediately"
+          >
+            <span>🔊 In-App Sound</span>
           </button>
           <button
             onClick={handleOpenAdd}
-            className="flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-medium rounded-xl shadow-lg shadow-indigo-500/20 text-xs sm:text-sm transition-all active:scale-95"
+            className="flex items-center justify-center gap-1.5 px-3.5 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-medium rounded-xl shadow-lg shadow-indigo-500/20 text-xs transition-all active:scale-95"
           >
             <Plus className="w-4 h-4" />
             <span>Add Reminder</span>

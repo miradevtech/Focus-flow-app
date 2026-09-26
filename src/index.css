@@ -60,3 +60,25 @@
 .glow-indigo {
   box-shadow: 0 0 25px -5px rgba(99, 102, 241, 0.3);
 }
+
+/* Safe-area insets for mobile notched devices and home bars */
+.safe-bottom-bar {
+  padding-bottom: max(1.125rem, calc(env(safe-area-inset-bottom, 0px) + 0.75rem));
+}
+
+.safe-top-banner {
+  top: max(1.25rem, calc(env(safe-area-inset-top, 0px) + 1.25rem));
+}
+
+.safe-top-header {
+  padding-top: max(0.75rem, calc(env(safe-area-inset-top, 0px) + 0.625rem));
+}
+
+/* Hide scrollbars but keep scrolling active */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
