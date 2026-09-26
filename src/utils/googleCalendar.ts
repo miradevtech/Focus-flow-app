@@ -1,20 +1,30 @@
-// Google Identity Services (GIS) & Google Calendar Integration
+// Google Calendar & Native Mobile Calendar Integration (Firebase Auth + Direct Sync)
+import {
+  signInWithPopup,
+  GoogleAuthProvider,
+  onAuthStateChanged,
+  User,
+  signOut
+} from 'firebase/auth';
+import { app, auth as firebaseAuth } from '../firebase/index';
 import { Alert } from '../types';
 import { api } from '../api/client';
+export { firebaseAuth };
 
-declare global {
-  interface Window {
-    google?: any;
-  }
-}
+const CALENDAR_SCOPE = 'https://www.googleapis.com/auth/calendar.events';
+
+const googleProvider = new GoogleAuthProvider();
+googleProvider.addScope(CALENDAR_SCOPE);
+googleProvider.setCustomParameters({
+  prompt: 'select_account'
+});
 
 const SESSION_TOKEN_KEY = 'focusflow_gcal_token';
 const SESSION_EXPIRY_KEY = 'focusflow_gcal_expiry';
-const DEFAULT_CLIENT_ID = '1043692880047-9le5see4ukgn95kopsruucdpk8g381g2.apps.googleusercontent.com';
-const CALENDAR_SCOPE = 'https://www.googleapis.com/auth/calendar.events';
+const USER_EMAIL_KEY = 'focusflow_gcal_user_email';
 
 let inMemoryToken: string | null = null;
-let tokenClientInstance: any = null;
+let inMemoryUserEmail: string | null = null;
 
 export function getStoredGoogleToken(): string | null {
   if (inMemoryToken) return inMemoryToken;
@@ -29,119 +39,71 @@ export function getStoredGoogleToken(): string | null {
   return null;
 }
 
-export function saveGoogleToken(token: string, expiresInSecs: number = 3500): void {
+export function getStoredUserEmail(): string | null {
+  if (inMemoryUserEmail) return inMemoryUserEmail;
+  try {
+    return sessionStorage.getItem(USER_EMAIL_KEY);
+  } catch {
+    return null;
+  }
+}
+
+export function saveGoogleToken(token: string, email?: string, expiresInSecs: number = 3500): void {
   inMemoryToken = token;
+  if (email) inMemoryUserEmail = email;
   try {
     sessionStorage.setItem(SESSION_TOKEN_KEY, token);
     sessionStorage.setItem(SESSION_EXPIRY_KEY, String(Date.now() + expiresInSecs * 1000));
+    if (email) sessionStorage.setItem(USER_EMAIL_KEY, email);
   } catch {}
 }
 
 export function clearGoogleToken(): void {
   inMemoryToken = null;
+  inMemoryUserEmail = null;
   try {
     sessionStorage.removeItem(SESSION_TOKEN_KEY);
     sessionStorage.removeItem(SESSION_EXPIRY_KEY);
+    sessionStorage.removeItem(USER_EMAIL_KEY);
   } catch {}
+  signOut(firebaseAuth).catch(() => {});
 }
 
-export async function fetchGoogleClientId(): Promise<string> {
-  try {
-    const res = await fetch('/api/google-calendar/config');
-    if (res.ok) {
-      const data = await res.json();
-      if (data.clientId) return data.clientId;
-    }
-  } catch (err) {
-    console.warn('Failed to fetch Google client ID from server:', err);
-  }
-  return DEFAULT_CLIENT_ID;
-}
-
-export async function initGoogleAuth(
-  onSuccess: (token: string) => void,
-  onError: (err: any) => void
-): Promise<() => void> {
-  const clientId = await fetchGoogleClientId();
-
-  return new Promise((resolve, reject) => {
-    const checkGsi = () => {
-      if (typeof window !== 'undefined' && window.google?.accounts?.oauth2) {
-        try {
-          tokenClientInstance = window.google.accounts.oauth2.initTokenClient({
-            client_id: clientId,
-            scope: CALENDAR_SCOPE,
-            callback: (tokenResponse: any) => {
-              if (tokenResponse?.error) {
-                console.error('GIS Error:', tokenResponse);
-                onError(tokenResponse.error);
-                return;
-              }
-              if (tokenResponse?.access_token) {
-                const expiresIn = parseInt(tokenResponse.expires_in, 10) || 3500;
-                saveGoogleToken(tokenResponse.access_token, expiresIn);
-                onSuccess(tokenResponse.access_token);
-              }
-            }
-          });
-
-          // Return trigger function
-          resolve(() => {
-            if (tokenClientInstance) {
-              tokenClientInstance.requestAccessToken({ prompt: '' });
-            }
-          });
-        } catch (err) {
-          reject(err);
-        }
-      } else {
-        setTimeout(checkGsi, 150);
-      }
-    };
-    checkGsi();
-  });
-}
-
-export async function requestGoogleCalendarLogin(): Promise<string> {
+/**
+ * Initiates Google Calendar connection using Firebase Authentication.
+ * Firebase manages authorized OAuth redirect handlers, preventing origin_mismatch errors.
+ */
+export async function requestGoogleCalendarLogin(): Promise<{ token: string; email?: string }> {
   const existing = getStoredGoogleToken();
-  if (existing) return existing;
+  if (existing) {
+    return { token: existing, email: getStoredUserEmail() || undefined };
+  }
 
-  const clientId = await fetchGoogleClientId();
+  try {
+    const result = await signInWithPopup(firebaseAuth, googleProvider);
+    const credential = GoogleAuthProvider.credentialFromResult(result);
+    const accessToken = credential?.accessToken;
 
-  return new Promise((resolve, reject) => {
-    let attempts = 0;
-    const interval = setInterval(() => {
-      attempts++;
-      if (typeof window !== 'undefined' && window.google?.accounts?.oauth2) {
-        clearInterval(interval);
-        try {
-          const client = window.google.accounts.oauth2.initTokenClient({
-            client_id: clientId,
-            scope: CALENDAR_SCOPE,
-            callback: (tokenResponse: any) => {
-              if (tokenResponse?.error) {
-                reject(new Error(tokenResponse.error_description || tokenResponse.error));
-                return;
-              }
-              if (tokenResponse?.access_token) {
-                const expiresIn = parseInt(tokenResponse.expires_in, 10) || 3500;
-                saveGoogleToken(tokenResponse.access_token, expiresIn);
-                resolve(tokenResponse.access_token);
-              } else {
-                reject(new Error('No access token received.'));
-              }
-            }
-          });
-          client.requestAccessToken({ prompt: '' });
-        } catch (err) {
-          reject(err);
-        }
-      } else if (attempts > 30) {
-        clearInterval(interval);
-        reject(new Error('Google Identity Services script failed to load. Please check your network.'));
-      }
-    }, 100);
-  });
+    if (!accessToken) {
+      throw new Error('Google authorization completed, but no calendar access token was received.');
+    }
+
+    const email = result.user?.email || undefined;
+    saveGoogleToken(accessToken, email);
+    return { token: accessToken, email };
+  } catch (error: any) {
+    console.error('Firebase Google Auth error:', error);
+    if (error?.code === 'auth/popup-closed-by-user') {
+      throw new Error('Sign-in cancelled. Please click "Connect" again to authorize calendar sync.');
+    }
+    if (error?.code === 'auth/unauthorized-domain') {
+      const currentOrigin = typeof window !== 'undefined' ? window.location.origin : 'this domain';
+      throw new Error(
+        `OAuth domain authorization needed: "${currentOrigin}" must be added to your Firebase / Google Cloud authorized domains. See the setup guide below.`
+      );
+    }
+    throw new Error(error?.message || 'Failed to authenticate with Google Calendar.');
+  }
 }
 
 export interface GoogleCalendarEventPayload {
@@ -197,7 +159,7 @@ export async function createGoogleCalendarEvent(
     const errorText = await res.text();
     if (res.status === 401) {
       clearGoogleToken();
-      throw new Error('Google authorization expired. Please reconnect Google Calendar.');
+      throw new Error('Google Calendar authorization expired. Please click Reconnect.');
     }
     throw new Error(`Google Calendar API error: ${errorText}`);
   }
@@ -205,32 +167,10 @@ export async function createGoogleCalendarEvent(
   return res.json();
 }
 
-export async function listUpcomingGoogleCalendarEvents(token: string, maxResults: number = 8): Promise<any[]> {
-  const now = new Date().toISOString();
-  const res = await fetch(
-    `https://www.googleapis.com/calendar/v3/calendars/primary/events?timeMin=${encodeURIComponent(
-      now
-    )}&maxResults=${maxResults}&singleEvents=true&orderBy=startTime`,
-    {
-      headers: {
-        Authorization: `Bearer ${token}`
-      }
-    }
-  );
-
-  if (!res.ok) {
-    if (res.status === 401) {
-      clearGoogleToken();
-      throw new Error('Google authorization expired.');
-    }
-    return [];
-  }
-
-  const data = await res.json();
-  return data.items || [];
-}
-
-export async function syncSingleAlertToGoogle(token: string, alert: Alert): Promise<{ success: boolean; eventId?: string }> {
+export async function syncSingleAlertToGoogle(
+  token: string,
+  alert: Alert
+): Promise<{ success: boolean; eventId?: string }> {
   try {
     let startIso: string;
     if (alert.remindAtUtc) {
@@ -244,12 +184,11 @@ export async function syncSingleAlertToGoogle(token: string, alert: Alert): Prom
 
     const event = await createGoogleCalendarEvent(token, {
       summary: `⏰ FocusFlow: ${alert.title}`,
-      description: `${alert.description || 'FocusFlow Scheduled Reminder'}\n\nTime: ${alert.time} on ${alert.date}\nDirect notification synced to phone.`,
+      description: `${alert.description || 'FocusFlow Scheduled Reminder'}\n\nScheduled for: ${alert.date} at ${alert.time}\nDirect alarm on your phone and calendar.`,
       startIso,
       remindMinutesBefore: 0
     });
 
-    // Mark as synced
     await api.updateAlert(alert.id, {
       syncedToGoogle: true,
       googleEventId: event.id
@@ -269,17 +208,109 @@ export async function syncAllAlertsToGoogle(
   let syncedCount = 0;
   let errors = 0;
 
-  // Sync pending alerts that have not yet been dismissed or completed
   const pendingAlerts = alerts.filter((a) => a.status === 'pending');
 
   for (const alert of pendingAlerts) {
     try {
       await syncSingleAlertToGoogle(token, alert);
       syncedCount++;
-    } catch (err) {
+    } catch {
       errors++;
     }
   }
 
   return { syncedCount, errors };
+}
+
+/**
+ * 1-Tap Universal Calendar URL
+ * Generates a direct Google Calendar event creation link that requires ZERO OAuth,
+ * ZERO permissions, and works for ANY user worldwide on mobile, tablet, or desktop.
+ */
+export function generateGoogleCalendarUrl(alert: {
+  title: string;
+  description?: string;
+  date: string;
+  time: string;
+  remindAtUtc?: string;
+}): string {
+  let start: Date;
+  if (alert.remindAtUtc) {
+    start = new Date(alert.remindAtUtc);
+  } else {
+    const [h, m] = (alert.time || '09:00').split(':');
+    start = new Date(alert.date);
+    start.setHours(parseInt(h, 10) || 9, parseInt(m, 10) || 0, 0, 0);
+  }
+  const end = new Date(start.getTime() + 30 * 60 * 1000);
+
+  const formatGCalDate = (d: Date) => {
+    return d.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+  };
+
+  const datesParam = `${formatGCalDate(start)}/${formatGCalDate(end)}`;
+  const title = encodeURIComponent(`⏰ FocusFlow: ${alert.title}`);
+  const details = encodeURIComponent(
+    `${alert.description || 'FocusFlow Alert'}\n\nScheduled for: ${alert.date} at ${alert.time}\nCreated from FocusFlow.`
+  );
+
+  return `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${datesParam}&details=${details}`;
+}
+
+/**
+ * 1-Tap Apple Calendar / iCal Download
+ * Directly prompts native iOS Calendar or Mac Calendar to add the reminder with sound alarm.
+ */
+export function downloadIcsFile(alert: {
+  title: string;
+  description?: string;
+  date: string;
+  time: string;
+  remindAtUtc?: string;
+}): void {
+  let start: Date;
+  if (alert.remindAtUtc) {
+    start = new Date(alert.remindAtUtc);
+  } else {
+    const [h, m] = (alert.time || '09:00').split(':');
+    start = new Date(alert.date);
+    start.setHours(parseInt(h, 10) || 9, parseInt(m, 10) || 0, 0, 0);
+  }
+  const end = new Date(start.getTime() + 30 * 60 * 1000);
+
+  const formatIcsDate = (d: Date) => {
+    return d.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+  };
+
+  const icsContent = [
+    'BEGIN:VCALENDAR',
+    'VERSION:2.0',
+    'PRODID:-//FocusFlow//Productivity App//EN',
+    'CALSCALE:GREGORIAN',
+    'METHOD:PUBLISH',
+    'BEGIN:VEVENT',
+    `UID:focusflow-${Date.now()}-${Math.random().toString(36).substring(2, 7)}@focusflow.app`,
+    `DTSTAMP:${formatIcsDate(new Date())}`,
+    `DTSTART:${formatIcsDate(start)}`,
+    `DTEND:${formatIcsDate(end)}`,
+    `SUMMARY:⏰ FocusFlow: ${alert.title}`,
+    `DESCRIPTION:${(alert.description || 'FocusFlow Reminder').replace(/\n/g, '\\n')}`,
+    'BEGIN:VALARM',
+    'ACTION:DISPLAY',
+    'DESCRIPTION:FocusFlow Reminder Alarm',
+    'TRIGGER:-PT0M',
+    'END:VALARM',
+    'END:VEVENT',
+    'END:VCALENDAR'
+  ].join('\r\n');
+
+  const blob = new Blob([icsContent], { type: 'text/calendar;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `focusflow-alert-${alert.title.toLowerCase().replace(/[^a-z0-9]/g, '-')}.ics`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }

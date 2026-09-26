@@ -2,6 +2,10 @@ import {StrictMode} from 'react';
 import {createRoot} from 'react-dom/client';
 import App from './App.tsx';
 import './index.css';
+import { testFirestoreConnection } from './firebase/index';
+
+// Validate connection to Firestore on initial boot
+testFirestoreConnection();
 
 // Register Service Worker for notifications and offline support
 if ('serviceWorker' in navigator && typeof window !== 'undefined') {

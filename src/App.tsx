@@ -39,12 +39,7 @@ export default function App() {
   useEffect(() => {
     const timer = setTimeout(() => {
       setShowSplash(false);
-      const isStandalone = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone;
-      const dismissed = sessionStorage.getItem('focusflow_ats_dismissed');
-      if (!isStandalone && !dismissed) {
-        setShowAtsModal(true);
-      }
-    }, 3000);
+    }, 1200);
     return () => clearTimeout(timer);
   }, []);
 
