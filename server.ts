@@ -859,6 +859,8 @@ async function main() {
     if (description !== undefined) alert.description = description.trim();
     if (date !== undefined) alert.date = date;
     if (time !== undefined) alert.time = time;
+    if (req.body.googleEventId !== undefined) alert.googleEventId = req.body.googleEventId;
+    if (req.body.syncedToGoogle !== undefined) alert.syncedToGoogle = Boolean(req.body.syncedToGoogle);
 
     if (date || time) {
       try {
@@ -1058,6 +1060,26 @@ async function main() {
     });
 
     res.status(201).json(testAlert);
+  });
+
+  // Google Calendar OAuth Config endpoint
+  app.get('/api/google-calendar/config', (req, res) => {
+    let clientId = process.env.GOOGLE_CLIENT_ID || '';
+    try {
+      if (fs.existsSync('firebase-applet-config.json')) {
+        const raw = fs.readFileSync('firebase-applet-config.json', 'utf-8');
+        const parsed = JSON.parse(raw);
+        if (parsed.oAuthClientId) {
+          clientId = parsed.oAuthClientId;
+        }
+      }
+    } catch (err) {
+      console.warn('Could not read firebase-applet-config.json:', err);
+    }
+    if (!clientId) {
+      clientId = '1043692880047-9le5see4ukgn95kopsruucdpk8g381g2.apps.googleusercontent.com';
+    }
+    res.json({ clientId });
   });
 
   // ==========================================

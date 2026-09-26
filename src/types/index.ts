@@ -96,6 +96,8 @@ export interface Alert {
   userTimezone: string;
   status: AlertStatus;
   notifiedAt: string | null;
+  googleEventId?: string | null;
+  syncedToGoogle?: boolean;
   createdAt: string;
   updatedAt: string;
 }

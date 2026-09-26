@@ -1,9 +1,33 @@
-import React, { useState } from 'react';
-import { Alert, AlertStatus } from '../types';
+import React, { useState, useEffect } from 'react';
+import { Alert } from '../types';
 import { api } from '../api/client';
-import { Plus, Bell, Calendar, Clock, Trash2, Edit3, Eye, X, CheckCircle2 } from 'lucide-react';
+import {
+  Plus,
+  Bell,
+  Calendar,
+  Trash2,
+  Edit3,
+  Eye,
+  X,
+  CheckCircle2,
+  CalendarCheck,
+  RefreshCw,
+  ExternalLink,
+  Volume2,
+  Smartphone,
+  ShieldCheck,
+  ArrowRight
+} from 'lucide-react';
 import { TimePicker24 } from './TimePicker24';
 import { registerPushDevice, requestAndRegisterNotifications } from '../utils/pushNotifications';
+import {
+  getStoredGoogleToken,
+  clearGoogleToken,
+  requestGoogleCalendarLogin,
+  syncAllAlertsToGoogle,
+  syncSingleAlertToGoogle,
+  createGoogleCalendarEvent
+} from '../utils/googleCalendar';
 
 interface AlertsViewProps {
   alerts: Alert[];
@@ -17,6 +41,31 @@ export const AlertsView: React.FC<AlertsViewProps> = ({ alerts, onRefresh }) => 
   const [editingAlert, setEditingAlert] = useState<Alert | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
+  // Google Calendar Integration State
+  const [gcalToken, setGcalToken] = useState<string | null>(() => getStoredGoogleToken());
+  const [isConnectingGcal, setIsConnectingGcal] = useState(false);
+  const [isSyncingGcal, setIsSyncingGcal] = useState(false);
+  const [isAddingTestGcal, setIsAddingTestGcal] = useState(false);
+  const [autoSyncGcal, setAutoSyncGcal] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('focusflow_gcal_autosync') !== 'false';
+    } catch {
+      return true;
+    }
+  });
+  const [syncFeedback, setSyncFeedback] = useState<string | null>(null);
+
+  // Web Push State
+  const [notifPermission, setNotifPermission] = useState<NotificationPermission>(
+    typeof window !== 'undefined' && 'Notification' in window ? Notification.permission : 'default'
+  );
+  const [isSendingPush, setIsSendingPush] = useState(false);
+
+  const isIOS = typeof window !== 'undefined' && /iphone|ipad|ipod/.test(window.navigator.userAgent.toLowerCase());
+  const isStandalone =
+    typeof window !== 'undefined' &&
+    (window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone === true);
+
   const getLocalDateStr = (d = new Date()) => {
     const year = d.getFullYear();
     const month = String(d.getMonth() + 1).padStart(2, '0');
@@ -28,10 +77,12 @@ export const AlertsView: React.FC<AlertsViewProps> = ({ alerts, onRefresh }) => 
   const [description, setDescription] = useState('');
   const [date, setDate] = useState(() => getLocalDateStr());
   const [time, setTime] = useState('18:07');
+  const [syncThisToGcal, setSyncThisToGcal] = useState(true);
 
-  const [notifPermission, setNotifPermission] = useState<NotificationPermission>(
-    typeof window !== 'undefined' && 'Notification' in window ? Notification.permission : 'default'
-  );
+  useEffect(() => {
+    const token = getStoredGoogleToken();
+    if (token) setGcalToken(token);
+  }, []);
 
   const handleOpenAdd = () => {
     setTitle('');
@@ -43,6 +94,7 @@ export const AlertsView: React.FC<AlertsViewProps> = ({ alerts, onRefresh }) => 
     const h = String(d.getHours()).padStart(2, '0');
     const m = String(d.getMinutes()).padStart(2, '0');
     setTime(`${h}:${m}`);
+    setSyncThisToGcal(Boolean(gcalToken && autoSyncGcal));
     setIsAddOpen(true);
   };
 
@@ -53,6 +105,7 @@ export const AlertsView: React.FC<AlertsViewProps> = ({ alerts, onRefresh }) => 
     setDate(alert.date);
     const [h, m] = (alert.time ? alert.time.replace('.', ':') : '18:07').split(':');
     setTime(`${String(parseInt(h, 10) || 0).padStart(2, '0')}:${String(parseInt(m, 10) || 0).padStart(2, '0')}`);
+    setSyncThisToGcal(!alert.syncedToGoogle && Boolean(gcalToken));
   };
 
   const handleSaveAlert = async (e: React.FormEvent) => {
@@ -83,8 +136,9 @@ export const AlertsView: React.FC<AlertsViewProps> = ({ alerts, onRefresh }) => 
       localTarget.setHours(parseInt(hStr, 10) || 0, parseInt(mStr, 10) || 0, 0, 0);
       const remindAtUtc = isNaN(localTarget.getTime()) ? new Date().toISOString() : localTarget.toISOString();
 
+      let savedAlert: Alert;
       if (editingAlert) {
-        await api.updateAlert(editingAlert.id, {
+        savedAlert = await api.updateAlert(editingAlert.id, {
           title: title.trim(),
           description: description.trim(),
           date,
@@ -94,7 +148,7 @@ export const AlertsView: React.FC<AlertsViewProps> = ({ alerts, onRefresh }) => 
         });
         setEditingAlert(null);
       } else {
-        await api.createAlert({
+        savedAlert = await api.createAlert({
           title: title.trim(),
           description: description.trim(),
           date,
@@ -104,6 +158,16 @@ export const AlertsView: React.FC<AlertsViewProps> = ({ alerts, onRefresh }) => 
         });
         setIsAddOpen(false);
       }
+
+      // If Google Calendar is connected and sync requested, sync immediately
+      if (gcalToken && syncThisToGcal) {
+        try {
+          await syncSingleAlertToGoogle(gcalToken, savedAlert);
+        } catch (gcalErr) {
+          console.warn('Auto sync to Google Calendar had an issue:', gcalErr);
+        }
+      }
+
       onRefresh();
     } catch (err) {
       console.error(err);
@@ -131,6 +195,124 @@ export const AlertsView: React.FC<AlertsViewProps> = ({ alerts, onRefresh }) => 
       onRefresh();
     } catch (err) {
       console.error(err);
+    }
+  };
+
+  // Google Calendar Handlers
+  const handleConnectGoogleCalendar = async () => {
+    setIsConnectingGcal(true);
+    setSyncFeedback(null);
+    try {
+      const token = await requestGoogleCalendarLogin();
+      setGcalToken(token);
+      setSyncFeedback('🎉 Google Calendar connected! Your reminders can now ring alarms and wake your locked screen.');
+      // Automatically sync existing pending alerts
+      const res = await syncAllAlertsToGoogle(token, alerts);
+      if (res.syncedCount > 0) {
+        setSyncFeedback(`🎉 Connected! Synced ${res.syncedCount} upcoming reminder(s) to your Google Calendar.`);
+        onRefresh();
+      }
+    } catch (err: any) {
+      alert(`Google Calendar connection: ${err?.message || 'Could not complete login. Please try again.'}`);
+    } finally {
+      setIsConnectingGcal(false);
+    }
+  };
+
+  const handleDisconnectGoogleCalendar = () => {
+    clearGoogleToken();
+    setGcalToken(null);
+    setSyncFeedback('Google Calendar disconnected.');
+  };
+
+  const handleSyncAllToGoogle = async () => {
+    let token = gcalToken || getStoredGoogleToken();
+    if (!token) {
+      try {
+        token = await requestGoogleCalendarLogin();
+        setGcalToken(token);
+      } catch (err: any) {
+        alert(`Please connect Google Calendar first: ${err?.message}`);
+        return;
+      }
+    }
+
+    setIsSyncingGcal(true);
+    setSyncFeedback(null);
+    try {
+      const res = await syncAllAlertsToGoogle(token, alerts);
+      setSyncFeedback(`✅ Successfully synced ${res.syncedCount} reminder(s) to your Google Calendar!`);
+      onRefresh();
+    } catch (err: any) {
+      setSyncFeedback(`⚠️ Sync issue: ${err?.message || 'Please check your connection.'}`);
+    } finally {
+      setIsSyncingGcal(false);
+    }
+  };
+
+  const handleSyncSingle = async (alertItem: Alert) => {
+    let token = gcalToken || getStoredGoogleToken();
+    if (!token) {
+      try {
+        token = await requestGoogleCalendarLogin();
+        setGcalToken(token);
+      } catch (err: any) {
+        alert(`Please connect Google Calendar first: ${err?.message}`);
+        return;
+      }
+    }
+
+    try {
+      await syncSingleAlertToGoogle(token, alertItem);
+      onRefresh();
+      alert(`✅ Reminder "${alertItem.title}" synced to your Google Calendar!`);
+    } catch (err: any) {
+      alert(`Could not sync to calendar: ${err?.message}`);
+    }
+  };
+
+  const handleAdd2MinTestAlarm = async () => {
+    let token = gcalToken || getStoredGoogleToken();
+    if (!token) {
+      try {
+        token = await requestGoogleCalendarLogin();
+        setGcalToken(token);
+      } catch (err: any) {
+        alert(`Please connect Google Calendar first: ${err?.message}`);
+        return;
+      }
+    }
+
+    setIsAddingTestGcal(true);
+    try {
+      const targetTime = new Date(Date.now() + 2 * 60 * 1000); // 2 minutes from now
+      await createGoogleCalendarEvent(token, {
+        summary: '⏰ FocusFlow Test Alert — Lock Screen Alarm',
+        description: 'Scheduled lock-screen alarm test from FocusFlow. If you hear sound or see this on your locked screen, it works perfectly!',
+        startIso: targetTime.toISOString(),
+        remindMinutesBefore: 0
+      });
+
+      // Also create a local alert entry so user sees it in FocusFlow
+      const pad = (n: number) => n.toString().padStart(2, '0');
+      const dateStr = `${targetTime.getFullYear()}-${pad(targetTime.getMonth() + 1)}-${pad(targetTime.getDate())}`;
+      const timeStr = `${pad(targetTime.getHours())}:${pad(targetTime.getMinutes())}`;
+
+      await api.createAlert({
+        title: '2-Minute Lock Screen Test',
+        description: 'Testing Google Calendar native phone alarm on lock screen',
+        date: dateStr,
+        time: timeStr,
+        userTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
+        remindAtUtc: targetTime.toISOString()
+      });
+
+      onRefresh();
+      alert(`🔔 Google Calendar Test Event created for 2 minutes from now (${targetTime.toLocaleTimeString()})!\n\nLock your phone screen now. Your phone's calendar will ring and display the alert!`);
+    } catch (err: any) {
+      alert(`Could not schedule test alarm: ${err?.message}`);
+    } finally {
+      setIsAddingTestGcal(false);
     }
   };
 
@@ -165,22 +347,8 @@ export const AlertsView: React.FC<AlertsViewProps> = ({ alerts, onRefresh }) => 
       } catch {}
     }
 
-    if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
-      try {
-        navigator.serviceWorker.controller.postMessage({
-          type: 'SHOW_NOTIFICATION',
-          title: 'FocusFlow Test Alert',
-          body: 'Sound & Notifications are working perfectly!'
-        });
-      } catch {}
-    }
-
-    alert('🔊 Sound played & test notification dispatched!');
+    alert('🔊 In-app sound played and test alert triggered!');
   };
-
-  const [isSendingPush, setIsSendingPush] = useState(false);
-  const isIOS = typeof window !== 'undefined' && /iphone|ipad|ipod/.test(window.navigator.userAgent.toLowerCase());
-  const isStandalone = typeof window !== 'undefined' && (window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone === true);
 
   const handleEnableNotifications = async () => {
     const res = await requestAndRegisterNotifications();
@@ -207,6 +375,105 @@ export const AlertsView: React.FC<AlertsViewProps> = ({ alerts, onRefresh }) => 
 
   return (
     <div className="space-y-6 pb-12">
+      {/* 1. GOOGLE CALENDAR LOCK-SCREEN SOLUTION BANNER */}
+      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-indigo-950/80 via-slate-900 to-purple-950/60 border border-indigo-500/30 p-5 sm:p-6 shadow-2xl">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-5">
+          <div className="space-y-2 max-w-xl">
+            <div className="flex items-center gap-2">
+              <div className="p-2 rounded-xl bg-indigo-500/20 text-indigo-400 border border-indigo-500/30">
+                <CalendarCheck className="w-5 h-5" />
+              </div>
+              <span className="text-xs font-bold uppercase tracking-wider text-indigo-300">
+                Guaranteed Lock-Screen Alarms
+              </span>
+              {gcalToken ? (
+                <span className="flex items-center gap-1 text-[11px] font-semibold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                  Google Calendar Connected
+                </span>
+              ) : (
+                <span className="text-[11px] font-semibold text-amber-300 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-full">
+                  Recommended Setup
+                </span>
+              )}
+            </div>
+
+            <h3 className="text-base sm:text-lg font-bold text-white tracking-tight">
+              Wake Locked Phone & Sound Alarms Outside the App
+            </h3>
+
+            <p className="text-xs sm:text-sm text-zinc-300 leading-relaxed">
+              Mobile browsers (especially Safari on iPhone) block web apps from playing sounds when your phone is locked or closed.
+              Syncing to <strong className="text-white">Google Calendar</strong> rings your phone's native alarm, vibrates, and shows lock screen alerts through your phone's built-in calendar at the exact scheduled minute.
+            </p>
+
+            {syncFeedback && (
+              <div className="p-3 rounded-xl bg-indigo-900/50 border border-indigo-400/40 text-xs text-indigo-200 animate-fadeIn">
+                {syncFeedback}
+              </div>
+            )}
+          </div>
+
+          <div className="flex flex-col sm:flex-row md:flex-col gap-2.5 shrink-0">
+            {gcalToken ? (
+              <>
+                <button
+                  onClick={handleSyncAllToGoogle}
+                  disabled={isSyncingGcal}
+                  className="flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-semibold rounded-2xl text-xs shadow-lg shadow-indigo-500/25 transition-all active:scale-95 disabled:opacity-50"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${isSyncingGcal ? 'animate-spin' : ''}`} />
+                  <span>{isSyncingGcal ? 'Syncing...' : 'Sync All Reminders to Calendar'}</span>
+                </button>
+
+                <button
+                  onClick={handleAdd2MinTestAlarm}
+                  disabled={isAddingTestGcal}
+                  className="flex items-center justify-center gap-2 px-4 py-2.5 bg-zinc-800/90 hover:bg-zinc-700 border border-indigo-500/40 text-indigo-200 font-semibold rounded-2xl text-xs transition-all active:scale-95 disabled:opacity-50"
+                  title="Adds a test alarm for 2 minutes from now to test your locked phone screen"
+                >
+                  <Smartphone className="w-3.5 h-3.5 text-indigo-400" />
+                  <span>{isAddingTestGcal ? 'Scheduling...' : '🔔 Test 2-Min Lock Screen Alarm'}</span>
+                </button>
+
+                <div className="flex items-center justify-between gap-3 px-1 pt-1 text-[11px] text-zinc-400">
+                  <label className="flex items-center gap-1.5 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={autoSyncGcal}
+                      onChange={(e) => {
+                        setAutoSyncGcal(e.target.checked);
+                        try {
+                          localStorage.setItem('focusflow_gcal_autosync', String(e.target.checked));
+                        } catch {}
+                      }}
+                      className="rounded border-zinc-700 bg-zinc-900 text-indigo-600 focus:ring-0"
+                    />
+                    <span>Auto-sync new reminders</span>
+                  </label>
+                  <button
+                    onClick={handleDisconnectGoogleCalendar}
+                    className="text-zinc-500 hover:text-zinc-300 underline"
+                  >
+                    Disconnect
+                  </button>
+                </div>
+              </>
+            ) : (
+              <button
+                onClick={handleConnectGoogleCalendar}
+                disabled={isConnectingGcal}
+                className="flex items-center justify-center gap-2 px-5 py-3 bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white font-bold rounded-2xl text-xs sm:text-sm shadow-xl shadow-indigo-600/30 transition-all active:scale-95 disabled:opacity-50"
+              >
+                <CalendarCheck className="w-4 h-4" />
+                <span>{isConnectingGcal ? 'Connecting...' : 'Connect Google Calendar'}</span>
+                <ArrowRight className="w-4 h-4 ml-1" />
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+
       {/* iOS Safari Home Screen Notice if needed */}
       {isIOS && !isStandalone && (
         <div className="p-3.5 rounded-2xl bg-indigo-950/40 border border-indigo-500/30 flex items-start gap-3">
@@ -214,24 +481,33 @@ export const AlertsView: React.FC<AlertsViewProps> = ({ alerts, onRefresh }) => 
             <Bell className="w-4 h-4" />
           </div>
           <div className="text-xs text-zinc-300 space-y-1">
-            <span className="font-semibold text-white block">iPhone Lock-Screen Alerts Notice</span>
+            <span className="font-semibold text-white block">iPhone Lock-Screen Direct Push Notice</span>
             <p className="text-zinc-400">
-              Apple requires web apps to be added to the home screen to wake your locked screen.
-              Tap Safari's <strong className="text-white">Share button</strong> (square with arrow up), then tap <strong className="text-white">'Add to Home Screen'</strong>.
+              For direct browser push on iOS, tap Safari's <strong className="text-white">Share button</strong> (square with arrow up), then tap <strong className="text-white">'Add to Home Screen'</strong>.
+              Connecting <strong className="text-white">Google Calendar</strong> above also ensures your lock screen rings automatically via Apple Calendar / Google Calendar!
             </p>
           </div>
         </div>
       )}
 
+      {/* Main Header & Actions */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h2 className="text-xl font-bold text-white tracking-tight">Alerts & Reminders</h2>
           <p className="text-xs text-zinc-400 mt-0.5">Scheduled notifications and background reminders.</p>
         </div>
-        <div className="flex items-center gap-2.5 flex-wrap">
-          {/* Web Push Status Indicator */}
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* Web Push Status */}
           <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-zinc-900 border border-zinc-800 text-xs font-medium">
-            <span className={`w-2 h-2 rounded-full ${notifPermission === 'granted' ? 'bg-emerald-500 animate-pulse' : notifPermission === 'denied' ? 'bg-red-500' : 'bg-amber-500'}`} />
+            <span
+              className={`w-2 h-2 rounded-full ${
+                notifPermission === 'granted'
+                  ? 'bg-emerald-500 animate-pulse'
+                  : notifPermission === 'denied'
+                  ? 'bg-red-500'
+                  : 'bg-amber-500'
+              }`}
+            />
             <span className="text-zinc-300">
               {notifPermission === 'granted' ? 'Push Active' : notifPermission === 'denied' ? 'Blocked' : 'Push Inactive'}
             </span>
@@ -244,6 +520,7 @@ export const AlertsView: React.FC<AlertsViewProps> = ({ alerts, onRefresh }) => 
             <Bell className="w-3.5 h-3.5 text-indigo-400" />
             <span>Enable Push</span>
           </button>
+
           <button
             onClick={handleSendTestPush}
             disabled={isSendingPush}
@@ -252,13 +529,16 @@ export const AlertsView: React.FC<AlertsViewProps> = ({ alerts, onRefresh }) => 
           >
             <span>{isSendingPush ? 'Sending...' : '📲 Send Test Push'}</span>
           </button>
+
           <button
             onClick={handleTestAlert}
             className="flex items-center justify-center gap-1.5 px-3 py-2 bg-zinc-900 border border-zinc-800 hover:border-zinc-700 text-zinc-300 font-medium rounded-xl text-xs transition-all active:scale-95"
             title="Test sound and in-app banner immediately"
           >
-            <span>🔊 In-App Sound</span>
+            <Volume2 className="w-3.5 h-3.5 text-zinc-400" />
+            <span>Sound</span>
           </button>
+
           <button
             onClick={handleOpenAdd}
             className="flex items-center justify-center gap-1.5 px-3.5 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-medium rounded-xl shadow-lg shadow-indigo-500/20 text-xs transition-all active:scale-95"
@@ -278,7 +558,7 @@ export const AlertsView: React.FC<AlertsViewProps> = ({ alerts, onRefresh }) => 
           <p className="text-xs text-zinc-400 mb-4">Create a scheduled reminder to stay on top of your schedule.</p>
           <button
             onClick={handleOpenAdd}
-            className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-xs font-medium rounded-xl transition-colors"
+            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium rounded-xl transition-colors"
           >
             Create Reminder
           </button>
@@ -290,27 +570,50 @@ export const AlertsView: React.FC<AlertsViewProps> = ({ alerts, onRefresh }) => 
               key={alert.id}
               className="p-5 rounded-3xl bg-zinc-900/60 border border-zinc-800 hover:border-zinc-700 shadow-xl shadow-black/20 flex flex-col sm:flex-row sm:items-center justify-between gap-4"
             >
-              <div className="space-y-1">
-                <div className="flex items-center gap-2">
-                  <span className={`text-[10px] px-2.5 py-0.5 rounded-full uppercase tracking-wider font-semibold ${
-                    alert.status === 'completed' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' :
-                    alert.status === 'dismissed' ? 'bg-zinc-800 text-zinc-400 border border-zinc-700' :
-                    'bg-blue-500/10 text-blue-400 border border-blue-500/20'
-                  }`}>
+              <div className="space-y-1.5">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span
+                    className={`text-[10px] px-2.5 py-0.5 rounded-full uppercase tracking-wider font-semibold ${
+                      alert.status === 'completed'
+                        ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                        : alert.status === 'dismissed'
+                        ? 'bg-zinc-800 text-zinc-400 border border-zinc-700'
+                        : 'bg-blue-500/10 text-blue-400 border border-blue-500/20'
+                    }`}
+                  >
                     {alert.status}
                   </span>
+
                   <span className="text-xs text-zinc-400 flex items-center gap-1">
                     <Calendar className="w-3.5 h-3.5 text-indigo-400" />
                     {alert.date} at {alert.time}
                   </span>
+
+                  {alert.syncedToGoogle && (
+                    <span className="text-[10px] px-2 py-0.5 rounded-full font-medium bg-indigo-500/15 text-indigo-300 border border-indigo-500/30 flex items-center gap-1">
+                      <CheckCircle2 className="w-3 h-3 text-indigo-400" />
+                      Google Calendar Alarm
+                    </span>
+                  )}
                 </div>
+
                 <h3 className="text-base font-bold text-white tracking-tight">{alert.title}</h3>
-                {alert.description && (
-                  <p className="text-xs text-zinc-400">{alert.description}</p>
-                )}
+                {alert.description && <p className="text-xs text-zinc-400">{alert.description}</p>}
               </div>
 
-              <div className="flex items-center gap-2 shrink-0">
+              <div className="flex items-center gap-2 shrink-0 flex-wrap">
+                {/* Sync to Google Calendar Button if not yet synced */}
+                {!alert.syncedToGoogle && alert.status === 'pending' && (
+                  <button
+                    onClick={() => handleSyncSingle(alert)}
+                    className="flex items-center gap-1 px-2.5 py-1.5 bg-indigo-950/40 hover:bg-indigo-900/50 border border-indigo-500/30 text-indigo-300 text-xs font-medium rounded-xl transition-colors active:scale-95"
+                    title="Sync this reminder to Google Calendar for lock-screen alarms"
+                  >
+                    <CalendarCheck className="w-3.5 h-3.5 text-indigo-400" />
+                    <span>Sync to Calendar</span>
+                  </button>
+                )}
+
                 {alert.status === 'pending' && (
                   <button
                     onClick={() => handleDismiss(alert.id)}
@@ -319,6 +622,7 @@ export const AlertsView: React.FC<AlertsViewProps> = ({ alerts, onRefresh }) => 
                     Dismiss
                   </button>
                 )}
+
                 <button
                   onClick={() => setViewingAlert(alert)}
                   className="p-2 rounded-xl text-zinc-400 hover:text-white hover:bg-zinc-800"
@@ -355,76 +659,92 @@ export const AlertsView: React.FC<AlertsViewProps> = ({ alerts, onRefresh }) => 
                 {editingAlert ? 'Edit Reminder' : 'Create Reminder'}
               </h3>
               <button
-                onClick={() => { setIsAddOpen(false); setEditingAlert(null); }}
+                onClick={() => {
+                  setIsAddOpen(false);
+                  setEditingAlert(null);
+                }}
                 className="p-2 text-zinc-400 hover:text-white rounded-xl bg-zinc-800/50"
               >
-                <X className="w-4 h-4" />
+                <X className="w-5 h-5" />
               </button>
             </div>
 
             <form onSubmit={handleSaveAlert} className="space-y-4">
               <div>
-                <label className="block text-xs font-medium text-zinc-400 mb-1">Reminder Title *</label>
+                <label className="block text-xs font-medium text-zinc-400 mb-1.5">Reminder Title *</label>
                 <input
                   type="text"
-                  required
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
-                  placeholder="e.g. Team standup meeting"
-                  className="w-full px-4 py-2.5 bg-zinc-950 border border-zinc-800 rounded-xl text-white text-sm focus:outline-none focus:border-blue-500"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-medium text-zinc-400 mb-1">Date *</label>
-                <input
-                  type="date"
+                  placeholder="e.g. Call dentist, Team standup, Medication"
+                  className="w-full px-4 py-2.5 rounded-xl bg-zinc-950 border border-zinc-800 focus:border-indigo-500 text-white text-sm outline-none"
                   required
-                  value={date}
-                  onChange={(e) => setDate(e.target.value)}
-                  className="w-full px-4 py-2.5 bg-zinc-950 border border-zinc-800 rounded-xl text-white text-sm focus:outline-none focus:border-blue-500"
                 />
               </div>
 
-              {/* 24-Hour TimePicker */}
-              <TimePicker24
-                value={time}
-                onChange={setTime}
-                label="Alert Time (24-Hour Clock)"
-              />
-
               <div>
-                <label className="block text-xs font-medium text-zinc-400 mb-1">Description</label>
+                <label className="block text-xs font-medium text-zinc-400 mb-1.5">Description (optional)</label>
                 <textarea
-                  rows={3}
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
-                  placeholder="Add details..."
-                  className="w-full px-4 py-2.5 bg-zinc-950 border border-zinc-800 rounded-xl text-white text-sm focus:outline-none focus:border-blue-500"
+                  placeholder="Additional context or notes..."
+                  rows={2}
+                  className="w-full px-4 py-2 rounded-xl bg-zinc-950 border border-zinc-800 focus:border-indigo-500 text-white text-sm outline-none resize-none"
                 />
               </div>
 
-              <div className="flex items-center justify-end gap-3 pt-4 border-t border-zinc-800">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-zinc-400 mb-1.5">Date *</label>
+                  <input
+                    type="date"
+                    value={date}
+                    onChange={(e) => setDate(e.target.value)}
+                    className="w-full px-4 py-2.5 rounded-xl bg-zinc-950 border border-zinc-800 focus:border-indigo-500 text-white text-sm outline-none"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-zinc-400 mb-1.5">Time (24h) *</label>
+                  <TimePicker24 value={time} onChange={(val) => setTime(val)} />
+                </div>
+              </div>
+
+              {/* Google Calendar Sync Option */}
+              <div className="p-3.5 rounded-2xl bg-indigo-950/30 border border-indigo-500/30">
+                <label className="flex items-start gap-2.5 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={syncThisToGcal}
+                    onChange={(e) => setSyncThisToGcal(e.target.checked)}
+                    className="mt-0.5 rounded border-zinc-700 bg-zinc-900 text-indigo-600 focus:ring-0"
+                  />
+                  <div className="text-xs">
+                    <span className="font-semibold text-white block">Sync to Google Calendar Alarm</span>
+                    <span className="text-zinc-400">
+                      Rings your phone sound and displays on your locked screen via Google/Apple Calendar.
+                    </span>
+                  </div>
+                </label>
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-2">
                 <button
                   type="button"
-                  onClick={() => { setIsAddOpen(false); setEditingAlert(null); }}
-                  className="px-4 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-medium rounded-xl transition-colors"
+                  onClick={() => {
+                    setIsAddOpen(false);
+                    setEditingAlert(null);
+                  }}
+                  className="px-4 py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-medium transition-colors"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={isSaving}
-                  className="px-5 py-2.5 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 disabled:opacity-50 text-white text-xs font-semibold rounded-xl shadow-lg shadow-blue-600/20 transition-all flex items-center gap-1.5"
+                  className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white text-xs font-semibold shadow-lg shadow-indigo-500/20 transition-all active:scale-95 disabled:opacity-50"
                 >
-                  {isSaving ? (
-                    <>
-                      <span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                      <span>Saving...</span>
-                    </>
-                  ) : (
-                    <span>{editingAlert ? 'Save Changes' : 'Create Reminder'}</span>
-                  )}
+                  {isSaving ? 'Saving...' : editingAlert ? 'Update Reminder' : 'Create Reminder'}
                 </button>
               </div>
             </form>
@@ -437,26 +757,62 @@ export const AlertsView: React.FC<AlertsViewProps> = ({ alerts, onRefresh }) => 
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-zinc-900 border border-zinc-800 rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-4">
             <div className="flex items-center justify-between">
-              <span className="text-xs text-indigo-400 font-semibold uppercase tracking-wider">{viewingAlert.status}</span>
+              <span
+                className={`text-[10px] px-2.5 py-0.5 rounded-full uppercase tracking-wider font-semibold ${
+                  viewingAlert.status === 'completed'
+                    ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                    : viewingAlert.status === 'dismissed'
+                    ? 'bg-zinc-800 text-zinc-400 border border-zinc-700'
+                    : 'bg-blue-500/10 text-blue-400 border border-blue-500/20'
+                }`}
+              >
+                {viewingAlert.status}
+              </span>
               <button
                 onClick={() => setViewingAlert(null)}
-                className="p-2 text-zinc-400 hover:text-white rounded-xl bg-zinc-800/50"
+                className="p-1.5 text-zinc-400 hover:text-white rounded-xl bg-zinc-800/50"
               >
-                <X className="w-4 h-4" />
+                <X className="w-5 h-5" />
               </button>
             </div>
+
             <h3 className="text-xl font-bold text-white">{viewingAlert.title}</h3>
-            <p className="text-xs text-zinc-400 flex items-center gap-1.5 bg-zinc-950 p-3 rounded-xl border border-zinc-800">
-              <Clock className="w-4 h-4 text-indigo-400" />
-              <span>Scheduled for {viewingAlert.date} at {viewingAlert.time}</span>
-            </p>
-            {viewingAlert.description && (
-              <p className="text-sm text-zinc-300 whitespace-pre-wrap">{viewingAlert.description}</p>
-            )}
-            <div className="flex justify-end pt-2">
+            {viewingAlert.description && <p className="text-sm text-zinc-300">{viewingAlert.description}</p>}
+
+            <div className="p-3.5 rounded-2xl bg-zinc-950/70 border border-zinc-800 space-y-2 text-xs">
+              <div className="flex items-center justify-between text-zinc-400">
+                <span>Scheduled Time:</span>
+                <span className="text-white font-medium">
+                  {viewingAlert.date} at {viewingAlert.time}
+                </span>
+              </div>
+              <div className="flex items-center justify-between text-zinc-400">
+                <span>Lock Screen Alarm:</span>
+                <span className={viewingAlert.syncedToGoogle ? 'text-emerald-400 font-medium' : 'text-zinc-500'}>
+                  {viewingAlert.syncedToGoogle ? '✓ Google Calendar Active' : 'Push Only'}
+                </span>
+              </div>
+              <div className="flex items-center justify-between text-zinc-400">
+                <span>Created:</span>
+                <span className="text-zinc-300">{new Date(viewingAlert.createdAt).toLocaleDateString()}</span>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2">
+              {!viewingAlert.syncedToGoogle && viewingAlert.status === 'pending' && (
+                <button
+                  onClick={() => {
+                    handleSyncSingle(viewingAlert);
+                    setViewingAlert(null);
+                  }}
+                  className="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold"
+                >
+                  Sync to Calendar
+                </button>
+              )}
               <button
                 onClick={() => setViewingAlert(null)}
-                className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-medium rounded-xl"
+                className="px-4 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-medium"
               >
                 Close
               </button>

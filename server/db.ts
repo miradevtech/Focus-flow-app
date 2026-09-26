@@ -85,6 +85,8 @@ export interface Alert {
   userTimezone: string;
   status: 'pending' | 'triggered' | 'dismissed' | 'completed';
   notifiedAt: string | null;
+  googleEventId?: string | null;
+  syncedToGoogle?: boolean;
   createdAt: string;
   updatedAt: string;
 }

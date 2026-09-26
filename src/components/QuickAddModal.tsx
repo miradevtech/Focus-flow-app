@@ -3,6 +3,7 @@ import { api } from '../api/client';
 import { TabType, Priority } from '../types';
 import { X, CheckSquare, Target, FolderKanban, ShoppingCart, Bell, FileText, Users } from 'lucide-react';
 import { TimePicker24 } from './TimePicker24';
+import { getStoredGoogleToken, syncSingleAlertToGoogle } from '../utils/googleCalendar';
 
 interface QuickAddModalProps {
   isOpen: boolean;
@@ -94,7 +95,7 @@ export const QuickAddModal: React.FC<QuickAddModalProps> = ({ isOpen, onClose, o
         localTarget.setHours(parseInt(hStr, 10) || 0, parseInt(mStr, 10) || 0, 0, 0);
         const remindAtUtc = isNaN(localTarget.getTime()) ? new Date().toISOString() : localTarget.toISOString();
 
-        await api.createAlert({
+        const createdAlert = await api.createAlert({
           title,
           description,
           date: dueDate,
@@ -102,6 +103,13 @@ export const QuickAddModal: React.FC<QuickAddModalProps> = ({ isOpen, onClose, o
           userTimezone,
           remindAtUtc
         });
+
+        const gToken = getStoredGoogleToken();
+        if (gToken) {
+          try {
+            await syncSingleAlertToGoogle(gToken, createdAlert);
+          } catch {}
+        }
       } else if (type === 'notes') {
         await api.createNote({
           title,
