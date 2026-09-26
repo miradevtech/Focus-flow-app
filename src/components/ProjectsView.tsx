@@ -106,7 +106,7 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ projects, onRefresh,
           <p className="text-gray-400 text-sm">Manage bigger initiatives and multi-step plans</p>
         </div>
         <button
-          onClick={onOpenQuickAdd}
+          onClick={handleOpenAdd}
           className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-medium shadow-lg shadow-indigo-500/20 hover:from-indigo-500 hover:to-purple-500 transition-all"
         >
           <Plus className="w-5 h-5" />

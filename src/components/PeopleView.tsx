@@ -93,7 +93,7 @@ export const PeopleView: React.FC<PeopleViewProps> = ({ people, onRefresh, onOpe
           <p className="text-xs text-zinc-400 mt-0.5">Keep track of important contacts, phone numbers, and notes.</p>
         </div>
         <button
-          onClick={onOpenQuickAdd}
+          onClick={handleOpenAdd}
           className="flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-blue-600 to-emerald-600 hover:from-blue-500 hover:to-emerald-500 text-white font-medium rounded-xl shadow-lg shadow-blue-600/20 text-sm transition-all"
         >
           <Plus className="w-4 h-4" />

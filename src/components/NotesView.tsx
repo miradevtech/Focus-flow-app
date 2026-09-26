@@ -78,7 +78,7 @@ export const NotesView: React.FC<NotesViewProps> = ({ notes, onRefresh, onOpenQu
           <p className="text-xs text-zinc-400 mt-0.5">Capture quick thoughts, reference information, and brainstorming notes.</p>
         </div>
         <button
-          onClick={onOpenQuickAdd}
+          onClick={handleOpenAdd}
           className="flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white font-medium rounded-xl shadow-lg shadow-blue-600/20 text-sm transition-all"
         >
           <Plus className="w-4 h-4" />
