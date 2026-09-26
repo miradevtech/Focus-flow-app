@@ -23,6 +23,7 @@ import {
   generateGoogleCalendarUrl,
   downloadIcsFile
 } from '../utils/googleCalendar';
+import { requestAndRegisterNotifications } from '../utils/pushNotifications';
 
 interface AlertsViewProps {
   alerts: Alert[];
@@ -37,6 +38,49 @@ export const AlertsView: React.FC<AlertsViewProps> = ({ alerts, onRefresh }) => 
   const [isSaving, setIsSaving] = useState(false);
   const [filter, setFilter] = useState<'all' | 'pending' | 'completed'>('pending');
   const [search, setSearch] = useState('');
+  const [showLockScreenTip, setShowLockScreenTip] = useState(() => {
+    return localStorage.getItem('ff_dismiss_lock_tip') !== 'true';
+  });
+  const [testingPush, setTestingPush] = useState(false);
+  const [pushStatusMessage, setPushStatusMessage] = useState<string | null>(null);
+
+  const handleTestPush = async () => {
+    setTestingPush(true);
+    setPushStatusMessage(null);
+    try {
+      if (typeof window !== 'undefined' && 'Notification' in window) {
+        if (Notification.permission !== 'granted') {
+          const res = await requestAndRegisterNotifications();
+          if (res.permission !== 'granted') {
+            setPushStatusMessage('⚠️ Notification permission not granted yet. Please allow notifications.');
+            setTestingPush(false);
+            return;
+          }
+        }
+      }
+      const testRes = await api.sendTestPush();
+      if (testRes.success) {
+        setPushStatusMessage(`✅ Sent VAPID push! Lock screen now to test.`);
+      } else {
+        setPushStatusMessage('⚠️ Could not send push. Check if notifications are enabled.');
+      }
+    } catch (err: any) {
+      try {
+        await requestAndRegisterNotifications();
+        const retry = await api.sendTestPush();
+        if (retry.success) {
+          setPushStatusMessage('✅ Push registered & sent! Lock screen to check.');
+        } else {
+          setPushStatusMessage(`⚠️ ${err?.message || 'Failed to dispatch push'}`);
+        }
+      } catch (e: any) {
+        setPushStatusMessage(`⚠️ ${e?.message || err?.message || 'Failed to dispatch push'}`);
+      }
+    } finally {
+      setTestingPush(false);
+      setTimeout(() => setPushStatusMessage(null), 6000);
+    }
+  };
 
   const getLocalDateStr = (d = new Date()) => {
     const year = d.getFullYear();
@@ -217,9 +261,19 @@ export const AlertsView: React.FC<AlertsViewProps> = ({ alerts, onRefresh }) => 
           <button
             onClick={handleTestSound}
             className="p-2.5 rounded-xl bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors"
-            title="Preview reminder chime"
+            title="Preview in-app sound"
           >
             <Volume2 className="w-4 h-4" />
+          </button>
+
+          <button
+            onClick={handleTestPush}
+            disabled={testingPush}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-zinc-900 border border-zinc-800 text-zinc-300 hover:text-white hover:bg-zinc-800 text-xs font-medium transition-colors"
+            title="Test VAPID Lock-Screen Push Notification"
+          >
+            <Smartphone className="w-3.5 h-3.5 text-indigo-400" />
+            <span>{testingPush ? 'Sending...' : 'Test Push'}</span>
           </button>
 
           <button
@@ -231,6 +285,12 @@ export const AlertsView: React.FC<AlertsViewProps> = ({ alerts, onRefresh }) => 
           </button>
         </div>
       </div>
+
+      {pushStatusMessage && (
+        <div className="p-3 rounded-2xl bg-zinc-900 border border-indigo-500/30 text-xs text-indigo-200 animate-in fade-in duration-200">
+          {pushStatusMessage}
+        </div>
+      )}
 
       {/* Search & Filter Bar */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -280,6 +340,31 @@ export const AlertsView: React.FC<AlertsViewProps> = ({ alerts, onRefresh }) => 
           />
         </div>
       </div>
+ 
+      {/* Quick Lock-Screen Reminder Helper */}
+      {showLockScreenTip && (
+        <div className="flex items-start justify-between gap-3 p-3.5 rounded-2xl bg-indigo-950/20 border border-indigo-500/20 text-xs">
+          <div className="flex items-start gap-2.5">
+            <Smartphone className="w-4 h-4 text-indigo-400 shrink-0 mt-0.5" />
+            <div className="space-y-1">
+              <span className="font-semibold text-white block">To hear alarms when your phone screen is locked:</span>
+              <p className="text-zinc-400 text-[11px] leading-relaxed">
+                Mobile browsers pause background web tabs when locked. Tap <strong className="text-emerald-300">+ Apple</strong> (iPhone) or <strong className="text-blue-300">+ Google</strong> (Android) on any reminder below to schedule a native system alarm that rings outside the app.
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => {
+              setShowLockScreenTip(false);
+              localStorage.setItem('ff_dismiss_lock_tip', 'true');
+            }}
+            className="text-zinc-500 hover:text-white p-1 rounded-lg hover:bg-zinc-800 transition-colors shrink-0"
+            title="Dismiss notice"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
 
       {/* Reminder Items List */}
       {filteredAlerts.length === 0 ? (
@@ -353,7 +438,29 @@ export const AlertsView: React.FC<AlertsViewProps> = ({ alerts, onRefresh }) => 
                 </div>
 
                 {/* Right: Actions */}
-                <div className="flex items-center gap-1 shrink-0">
+                <div className="flex items-center gap-1.5 shrink-0 flex-wrap sm:flex-nowrap justify-end">
+                  {/* 1-Tap Native Phone Alarm Buttons */}
+                  <button
+                    type="button"
+                    onClick={() => downloadIcsFile(alert)}
+                    className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-emerald-950/40 hover:bg-emerald-900/60 border border-emerald-500/30 text-emerald-300 text-xs font-medium transition-colors active:scale-95"
+                    title="Add Alarm to Apple Calendar (iPhone/iPad/Mac - rings when locked)"
+                  >
+                    <Smartphone className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>+ Apple</span>
+                  </button>
+
+                  <a
+                    href={generateGoogleCalendarUrl(alert)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-blue-950/40 hover:bg-blue-900/60 border border-blue-500/30 text-blue-300 text-xs font-medium transition-colors active:scale-95"
+                    title="Add Alarm to Google Calendar (Android/PC - rings when locked)"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5 text-blue-400" />
+                    <span>+ Google</span>
+                  </a>
+
                   <button
                     onClick={() => setViewingAlert(alert)}
                     className="p-2 rounded-xl text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors"
@@ -486,6 +593,52 @@ export const AlertsView: React.FC<AlertsViewProps> = ({ alerts, onRefresh }) => 
                   onChange={(e) => setDescription(e.target.value)}
                   className="w-full px-3.5 py-2 bg-zinc-950 border border-zinc-800 rounded-xl text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-indigo-500 resize-none"
                 />
+              </div>
+
+              {/* Ring Phone Alarm (Apple / Google) */}
+              <div className="p-3.5 rounded-2xl bg-zinc-950/70 border border-zinc-800/80 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-zinc-200 flex items-center gap-1.5">
+                    <Smartphone className="w-3.5 h-3.5 text-indigo-400" />
+                    <span>Ring phone when screen is off / locked:</span>
+                  </span>
+                </div>
+                <p className="text-[11px] text-zinc-400 leading-relaxed">
+                  Phones sleep background browser tabs. Tap below to schedule a native system alarm on your phone:
+                </p>
+                <div className="grid grid-cols-2 gap-2 pt-0.5">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      downloadIcsFile({
+                        title: title.trim() || 'FocusFlow Reminder',
+                        description: description.trim(),
+                        date,
+                        time,
+                        remindAtUtc: new Date().toISOString()
+                      });
+                    }}
+                    className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-950/40 hover:bg-emerald-900/60 border border-emerald-500/30 text-emerald-300 text-xs font-medium transition-colors active:scale-95"
+                  >
+                    <Smartphone className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>Add to Apple Cal</span>
+                  </button>
+                  <a
+                    href={generateGoogleCalendarUrl({
+                      title: title.trim() || 'FocusFlow Reminder',
+                      description: description.trim(),
+                      date,
+                      time,
+                      remindAtUtc: new Date().toISOString()
+                    })}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-blue-950/40 hover:bg-blue-900/60 border border-blue-500/30 text-blue-300 text-xs font-medium transition-colors active:scale-95"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5 text-blue-400" />
+                    <span>Add to Google Cal</span>
+                  </a>
+                </div>
               </div>
 
               {/* Actions */}
