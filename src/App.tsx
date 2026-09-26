@@ -11,7 +11,7 @@ import {
   Person,
   HistoryItem
 } from './types';
-import { api, getStoredToken, getStoredApiBase, setStoredApiBase } from './api/client';
+import { api, getStoredToken } from './api/client';
 import { Navbar } from './components/Navbar';
 import { Header } from './components/Header';
 import { QuickAddModal } from './components/QuickAddModal';
@@ -34,8 +34,6 @@ export default function App() {
   const [showAtsModal, setShowAtsModal] = useState(false);
   const [currentTab, setCurrentTab] = useState<TabType>('home');
   const [isQuickAddOpen, setIsQuickAddOpen] = useState(false);
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [apiBaseInput, setApiBaseInput] = useState(getStoredApiBase());
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -186,7 +184,6 @@ export default function App() {
           onLogout={handleLogout}
           onOpenQuickAdd={() => setIsQuickAddOpen(true)}
           onNavigate={setCurrentTab}
-          onOpenSettings={() => setIsSettingsOpen(true)}
         />
 
         <main className="flex-1 p-4 sm:p-8 max-w-7xl w-full mx-auto overflow-y-auto">
@@ -276,46 +273,6 @@ export default function App() {
               >
                 <Download className="w-4 h-4" />
                 <span>Add to Home Screen</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Settings Modal */}
-      {isSettingsOpen && (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in">
-          <div className="bg-zinc-900 border border-zinc-800 rounded-3xl p-6 max-w-md w-full shadow-2xl relative space-y-4">
-            <button
-              onClick={() => setIsSettingsOpen(false)}
-              className="absolute top-4 right-4 text-zinc-400 hover:text-white p-1 rounded-xl bg-zinc-800/50"
-            >
-              <X className="w-5 h-5" />
-            </button>
-            <h3 className="text-xl font-bold text-white">Backend Connection</h3>
-            <p className="text-sm text-zinc-400">
-              Enter your Render backend URL (e.g. <code className="text-indigo-400">https://focusflow-backend.onrender.com</code>) to connect your frontend app to your backend database.
-            </p>
-            <div className="space-y-2">
-              <label className="text-xs font-semibold uppercase tracking-wider text-zinc-400">Backend API URL</label>
-              <input
-                type="text"
-                value={apiBaseInput}
-                onChange={(e) => setApiBaseInput(e.target.value)}
-                placeholder="https://your-backend.onrender.com"
-                className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:border-indigo-500"
-              />
-            </div>
-            <div className="flex gap-3 pt-2">
-              <button
-                onClick={() => {
-                  setStoredApiBase(apiBaseInput);
-                  setIsSettingsOpen(false);
-                  window.location.reload();
-                }}
-                className="flex-1 py-3 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white font-medium rounded-xl transition-all text-sm"
-              >
-                Save & Reload App
               </button>
             </div>
           </div>

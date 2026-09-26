@@ -157,7 +157,7 @@ export const ShoppingView: React.FC<ShoppingViewProps> = ({ shoppingItems, onRef
           <p className="text-gray-400 text-sm">Track purchases, prices, specs, and shopping checklists</p>
         </div>
         <button
-          onClick={handleOpenAdd}
+          onClick={onOpenQuickAdd}
           className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-medium shadow-lg shadow-indigo-500/20 hover:from-indigo-500 hover:to-purple-500 transition-all"
         >
           <Plus className="w-5 h-5" />
@@ -172,7 +172,7 @@ export const ShoppingView: React.FC<ShoppingViewProps> = ({ shoppingItems, onRef
             <h3 className="text-white font-medium text-lg">Your shopping list is empty</h3>
             <p className="text-gray-400 text-sm">Add items you plan to buy.</p>
             <button
-              onClick={handleOpenAdd}
+              onClick={onOpenQuickAdd}
               className="px-4 py-2 bg-indigo-600/20 text-indigo-400 border border-indigo-500/30 rounded-xl text-sm font-medium hover:bg-indigo-600/30 transition-all inline-block mt-2"
             >
               Add Shopping Item

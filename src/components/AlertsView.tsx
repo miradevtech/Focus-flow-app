@@ -116,7 +116,7 @@ export const AlertsView: React.FC<AlertsViewProps> = ({ alerts, onRefresh }) => 
             <span>Enable Notifications</span>
           </button>
           <button
-            onClick={handleOpenAdd}
+            onClick={onOpenQuickAdd}
             className="flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-medium rounded-xl shadow-lg shadow-indigo-500/20 text-sm transition-all"
           >
             <Plus className="w-4 h-4" />
@@ -133,7 +133,7 @@ export const AlertsView: React.FC<AlertsViewProps> = ({ alerts, onRefresh }) => 
           <h3 className="font-semibold text-white mb-1">No upcoming reminders</h3>
           <p className="text-xs text-zinc-400 mb-4">Create a scheduled reminder to stay on top of your schedule.</p>
           <button
-            onClick={handleOpenAdd}
+            onClick={onOpenQuickAdd}
             className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-xs font-medium rounded-xl transition-colors"
           >
             Create Reminder
@@ -254,10 +254,11 @@ export const AlertsView: React.FC<AlertsViewProps> = ({ alerts, onRefresh }) => 
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-zinc-400 mb-1">Time *</label>
+                  <label className="block text-xs font-medium text-zinc-400 mb-1">Time (24-hr) *</label>
                   <input
                     type="time"
                     required
+                    step="60"
                     value={time}
                     onChange={(e) => setTime(e.target.value)}
                     className="w-full px-4 py-2.5 bg-zinc-950 border border-zinc-800 rounded-xl text-white text-sm focus:outline-none focus:border-blue-500"

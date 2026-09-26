@@ -195,9 +195,10 @@ export const QuickAddModal: React.FC<QuickAddModalProps> = ({ isOpen, onClose, o
               </div>
               {type === 'tasks' && (
                 <div>
-                  <label className="block text-xs font-medium text-zinc-400 mb-1">Due Time</label>
+                  <label className="block text-xs font-medium text-zinc-400 mb-1">Due Time (24-hr)</label>
                   <input
                     type="time"
+                    step="60"
                     value={dueTime}
                     onChange={(e) => setDueTime(e.target.value)}
                     className="w-full px-3.5 py-2.5 bg-zinc-900 border border-zinc-800 rounded-xl text-white text-sm focus:outline-none focus:border-blue-500"
@@ -206,9 +207,10 @@ export const QuickAddModal: React.FC<QuickAddModalProps> = ({ isOpen, onClose, o
               )}
               {type === 'alerts' && (
                 <div>
-                  <label className="block text-xs font-medium text-zinc-400 mb-1">Alert Time</label>
+                  <label className="block text-xs font-medium text-zinc-400 mb-1">Alert Time (24-hr)</label>
                   <input
                     type="time"
+                    step="60"
                     value={dueTime}
                     onChange={(e) => setDueTime(e.target.value)}
                     className="w-full px-3.5 py-2.5 bg-zinc-900 border border-zinc-800 rounded-xl text-white text-sm focus:outline-none focus:border-blue-500"

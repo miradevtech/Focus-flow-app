@@ -93,7 +93,7 @@ export const PeopleView: React.FC<PeopleViewProps> = ({ people, onRefresh }) => 
           <p className="text-xs text-zinc-400 mt-0.5">Keep track of important contacts, phone numbers, and notes.</p>
         </div>
         <button
-          onClick={handleOpenAdd}
+          onClick={onOpenQuickAdd}
           className="flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-blue-600 to-emerald-600 hover:from-blue-500 hover:to-emerald-500 text-white font-medium rounded-xl shadow-lg shadow-blue-600/20 text-sm transition-all"
         >
           <Plus className="w-4 h-4" />
@@ -122,7 +122,7 @@ export const PeopleView: React.FC<PeopleViewProps> = ({ people, onRefresh }) => 
           <h3 className="font-semibold text-white mb-1">No contacts added yet</h3>
           <p className="text-xs text-zinc-400 mb-4">Add people you want to keep track of with tap-to-call and email support.</p>
           <button
-            onClick={handleOpenAdd}
+            onClick={onOpenQuickAdd}
             className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-xs font-medium rounded-xl transition-colors"
           >
             Add Contact
