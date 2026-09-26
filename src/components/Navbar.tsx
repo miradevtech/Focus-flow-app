@@ -28,7 +28,7 @@ const navItems: NavItem[] = [
   { id: 'tasks', label: 'Tasks', icon: CheckSquare },
   { id: 'goals', label: 'Goals', icon: Target },
   { id: 'projects', label: 'Projects', icon: FolderKanban },
-  { id: 'shopping', label: 'Shopping', icon: ShoppingCart },
+  { id: 'shopping', label: 'Shop', icon: ShoppingCart },
   { id: 'alerts', label: 'Alerts', icon: Bell },
   { id: 'notes', label: 'Notes', icon: FileText },
   { id: 'people', label: 'People', icon: Users },
@@ -73,8 +73,8 @@ export const Navbar: React.FC<NavbarProps> = ({ currentTab, onSelectTab }) => {
       </aside>
 
       {/* Mobile & Tablet Bottom Navigation */}
-      <nav className="lg:hidden fixed bottom-0 inset-x-0 z-40 bg-zinc-950/95 backdrop-blur-xl border-t border-zinc-900/80 px-2 py-2 shadow-2xl">
-        <div className="flex items-center justify-between max-w-md mx-auto overflow-x-auto no-scrollbar gap-1">
+      <nav className="lg:hidden fixed bottom-0 inset-x-0 z-40 bg-zinc-950/95 backdrop-blur-xl border-t border-zinc-900/80 px-1 py-1.5 shadow-2xl pb-safe">
+        <div className="flex items-center justify-between max-w-lg mx-auto overflow-x-auto no-scrollbar gap-0.5 px-1">
           {navItems.map((item) => {
             const Icon = item.icon;
             const isActive = currentTab === item.id;
@@ -82,12 +82,12 @@ export const Navbar: React.FC<NavbarProps> = ({ currentTab, onSelectTab }) => {
               <button
                 key={item.id}
                 onClick={() => onSelectTab(item.id)}
-                className={`flex flex-col items-center justify-center min-w-[56px] py-1.5 px-1 rounded-xl transition-all ${
+                className={`flex flex-col items-center justify-center min-w-[36px] flex-1 py-1 px-0.5 rounded-lg transition-all ${
                   isActive ? 'text-blue-400 bg-blue-600/10' : 'text-zinc-400 hover:text-zinc-200'
                 }`}
               >
-                <Icon className="w-5 h-5 mb-1" />
-                <span className="text-[10px] font-medium tracking-tight truncate max-w-[60px]">
+                <Icon className="w-4 h-4 mb-0.5" />
+                <span className="text-[9px] font-medium tracking-tighter truncate w-full text-center">
                   {item.label}
                 </span>
               </button>

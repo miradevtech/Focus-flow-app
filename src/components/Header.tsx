@@ -46,31 +46,31 @@ export const Header: React.FC<HeaderProps> = ({
   };
 
   return (
-    <header className="sticky top-0 z-30 bg-zinc-950/80 backdrop-blur-xl border-b border-zinc-900/80 px-4 sm:px-8 py-4 flex items-center justify-between">
+    <header className="sticky top-0 z-30 bg-zinc-950/90 backdrop-blur-xl border-b border-zinc-955 px-4 sm:px-8 pt-10 sm:pt-4 pb-3 flex items-center justify-between">
       <div className="flex items-center gap-3">
         <Logo size={36} className="w-9 h-9" />
         <div>
           <div className="flex items-center gap-2">
             <span className="text-[10px] uppercase tracking-wider text-indigo-400 font-semibold">{todayStr}</span>
           </div>
-          <h2 className="text-xl sm:text-2xl font-bold text-white tracking-tight">
+          <h2 className="text-lg sm:text-2xl font-bold text-white tracking-tight">
             {getTabTitle(currentTab)}
           </h2>
         </div>
       </div>
 
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-2.5">
         <button
           onClick={onOpenQuickAdd}
-          className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white font-medium rounded-xl shadow-lg shadow-blue-600/20 transition-all text-xs sm:text-sm active:scale-95"
+          className="flex items-center gap-1.5 px-3.5 py-2 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white font-medium rounded-xl shadow-lg shadow-blue-600/20 transition-all text-xs active:scale-95"
         >
           <Plus className="w-4 h-4" />
-          <span className="hidden sm:inline">New Item</span>
+          <span className="hidden sm:inline">New</span>
         </button>
 
         <button
           onClick={() => onNavigate('alerts')}
-          className="relative p-2.5 rounded-xl bg-zinc-900/80 border border-zinc-800 text-zinc-300 hover:text-white hover:bg-zinc-800/80 transition-all"
+          className="relative p-2.5 rounded-xl bg-zinc-900 border border-zinc-800 text-zinc-300 hover:text-white hover:bg-zinc-800 transition-all"
           title="Reminders & Alerts"
         >
           <Bell className="w-4 h-4" />
