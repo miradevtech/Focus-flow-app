@@ -1,0 +1,6 @@
+{
+  "name": "FocusFlow",
+  "description": "A mobile-first personal productivity and organization platform for tasks, goals, projects, shopping, alerts, notes, people, and history.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
