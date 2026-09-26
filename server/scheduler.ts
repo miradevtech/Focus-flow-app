@@ -67,7 +67,7 @@ export async function tickScheduler() {
 
   // Find all pending alerts whose scheduled time has arrived or passed
   const dueAlerts = db.alerts.filter(
-    (a) => a.status === 'pending' && a.remindAtUtc <= nowIso
+    (a) => (a.status === 'pending' || (a.status as string) === 'active') && a.remindAtUtc <= nowIso
   );
 
   if (dueAlerts.length === 0) {

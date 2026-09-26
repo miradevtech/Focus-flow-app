@@ -16,10 +16,17 @@ export const QuickAddModal: React.FC<QuickAddModalProps> = ({ isOpen, onClose, o
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
+  const getLocalDateStr = (d = new Date()) => {
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
   // Common fields
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
-  const [dueDate, setDueDate] = useState(new Date().toISOString().split('T')[0]);
+  const [dueDate, setDueDate] = useState(() => getLocalDateStr());
   const [dueTime, setDueTime] = useState('12:00');
   const [priority, setPriority] = useState<Priority>('medium');
   const [category, setCategory] = useState('General');
@@ -79,12 +86,21 @@ export const QuickAddModal: React.FC<QuickAddModalProps> = ({ isOpen, onClose, o
         });
       } else if (type === 'alerts') {
         const userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+        const [hStr, mStr] = dueTime.replace('.', ':').split(':');
+        const cleanTime = `${String(parseInt(hStr, 10) || 0).padStart(2, '0')}:${String(parseInt(mStr, 10) || 0).padStart(2, '0')}`;
+        const [y, mon, d] = dueDate.split('-').map(Number);
+        const localTarget = new Date();
+        localTarget.setFullYear(y, mon - 1, d);
+        localTarget.setHours(parseInt(hStr, 10) || 0, parseInt(mStr, 10) || 0, 0, 0);
+        const remindAtUtc = isNaN(localTarget.getTime()) ? new Date().toISOString() : localTarget.toISOString();
+
         await api.createAlert({
           title,
           description,
           date: dueDate,
-          time: dueTime,
-          userTimezone
+          time: cleanTime,
+          userTimezone,
+          remindAtUtc
         });
       } else if (type === 'notes') {
         await api.createNote({

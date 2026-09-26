@@ -16,9 +16,16 @@ export const AlertsView: React.FC<AlertsViewProps> = ({ alerts, onRefresh }) => 
   const [editingAlert, setEditingAlert] = useState<Alert | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
+  const getLocalDateStr = (d = new Date()) => {
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
-  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+  const [date, setDate] = useState(() => getLocalDateStr());
   const [time, setTime] = useState('18:07');
 
   const [notifPermission, setNotifPermission] = useState<NotificationPermission>(
@@ -28,8 +35,13 @@ export const AlertsView: React.FC<AlertsViewProps> = ({ alerts, onRefresh }) => 
   const handleOpenAdd = () => {
     setTitle('');
     setDescription('');
-    setDate(new Date().toISOString().split('T')[0]);
-    setTime('18:07');
+    setDate(getLocalDateStr());
+    // Default to 5 minutes from right now
+    const d = new Date();
+    d.setMinutes(d.getMinutes() + 5);
+    const h = String(d.getHours()).padStart(2, '0');
+    const m = String(d.getMinutes()).padStart(2, '0');
+    setTime(`${h}:${m}`);
     setIsAddOpen(true);
   };
 
@@ -38,7 +50,8 @@ export const AlertsView: React.FC<AlertsViewProps> = ({ alerts, onRefresh }) => 
     setTitle(alert.title);
     setDescription(alert.description);
     setDate(alert.date);
-    setTime(alert.time ? alert.time.replace('.', ':') : '18:07');
+    const [h, m] = (alert.time ? alert.time.replace('.', ':') : '18:07').split(':');
+    setTime(`${String(parseInt(h, 10) || 0).padStart(2, '0')}:${String(parseInt(m, 10) || 0).padStart(2, '0')}`);
   };
 
   const handleSaveAlert = async (e: React.FormEvent) => {
@@ -59,14 +72,15 @@ export const AlertsView: React.FC<AlertsViewProps> = ({ alerts, onRefresh }) => 
     setIsSaving(true);
     try {
       const userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
-      const cleanTime = time.replace('.', ':');
-      let remindAtUtc: string;
-      try {
-        const localTarget = new Date(`${date}T${cleanTime}:00`);
-        remindAtUtc = isNaN(localTarget.getTime()) ? new Date().toISOString() : localTarget.toISOString();
-      } catch {
-        remindAtUtc = new Date().toISOString();
-      }
+      const [hStr, mStr] = time.replace('.', ':').split(':');
+      const cleanTime = `${String(parseInt(hStr, 10) || 0).padStart(2, '0')}:${String(parseInt(mStr, 10) || 0).padStart(2, '0')}`;
+
+      // Construct local date accurately
+      const [y, mon, d] = date.split('-').map(Number);
+      const localTarget = new Date();
+      localTarget.setFullYear(y, mon - 1, d);
+      localTarget.setHours(parseInt(hStr, 10) || 0, parseInt(mStr, 10) || 0, 0, 0);
+      const remindAtUtc = isNaN(localTarget.getTime()) ? new Date().toISOString() : localTarget.toISOString();
 
       if (editingAlert) {
         await api.updateAlert(editingAlert.id, {
@@ -119,19 +133,68 @@ export const AlertsView: React.FC<AlertsViewProps> = ({ alerts, onRefresh }) => 
     }
   };
 
+  const handleTestAlert = () => {
+    try {
+      const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(587.33, audioCtx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(880, audioCtx.currentTime + 0.15);
+      gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.5);
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.start();
+      osc.stop(audioCtx.currentTime + 0.5);
+    } catch {}
+
+    if ('vibrate' in navigator) {
+      try {
+        navigator.vibrate([200, 100, 200]);
+      } catch {}
+    }
+
+    if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
+      try {
+        new Notification('FocusFlow Test Alert', {
+          body: 'Sound & Notifications are working perfectly!',
+          icon: '/icon-192.png'
+        });
+      } catch {}
+    }
+
+    if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+      try {
+        navigator.serviceWorker.controller.postMessage({
+          type: 'SHOW_NOTIFICATION',
+          title: 'FocusFlow Test Alert',
+          body: 'Sound & Notifications are working perfectly!'
+        });
+      } catch {}
+    }
+
+    alert('🔊 Sound played & test notification dispatched!');
+  };
+
   const handleEnableNotifications = async () => {
     if ('Notification' in window) {
       const permission = await Notification.requestPermission();
       setNotifPermission(permission);
       if (permission === 'granted') {
         new Notification('FocusFlow Notifications Enabled', {
-          body: 'You will now receive scheduled reminders and alert notifications!'
+          body: 'You will now receive scheduled reminders and alert notifications!',
+          icon: '/icon-192.png'
         });
 
         // Register push subscription with server
         try {
           if ('serviceWorker' in navigator) {
-            const reg = await navigator.serviceWorker.ready;
+            let reg = await navigator.serviceWorker.getRegistration();
+            if (!reg) {
+              reg = await navigator.serviceWorker.register('/sw.js');
+            }
+            await navigator.serviceWorker.ready;
             const { publicKey } = await api.getVapidKey();
             if (publicKey && reg.pushManager) {
               const padding = '='.repeat((4 - (publicKey.length % 4)) % 4);
@@ -151,11 +214,12 @@ export const AlertsView: React.FC<AlertsViewProps> = ({ alerts, onRefresh }) => 
         } catch (e) {
           console.warn('Push registration skipped or failed:', e);
         }
+        alert('Notifications are active! Scheduled alerts will sound and notify you.');
       } else {
-        alert('Notification permission was denied or dismissed.');
+        alert('Notification permission was denied or dismissed. Please enable notifications in your browser settings.');
       }
     } else {
-      alert('Browser notifications are not supported in this browser.');
+      alert('Browser notifications are not supported in this browser. In-app alerts and sounds will still notify you!');
     }
   };
 
@@ -177,14 +241,21 @@ export const AlertsView: React.FC<AlertsViewProps> = ({ alerts, onRefresh }) => 
 
           <button
             onClick={handleEnableNotifications}
-            className="flex items-center justify-center gap-2 px-4 py-2.5 bg-zinc-900 border border-zinc-800 hover:border-zinc-700 text-zinc-200 font-medium rounded-xl text-sm transition-all"
+            className="flex items-center justify-center gap-2 px-3.5 py-2.5 bg-zinc-900 border border-zinc-800 hover:border-zinc-700 text-zinc-200 font-medium rounded-xl text-xs sm:text-sm transition-all active:scale-95"
           >
             <Bell className="w-4 h-4 text-indigo-400" />
             <span>Enable Push</span>
           </button>
           <button
+            onClick={handleTestAlert}
+            className="flex items-center justify-center gap-2 px-3.5 py-2.5 bg-zinc-900 border border-indigo-500/30 hover:border-indigo-500 text-indigo-300 font-medium rounded-xl text-xs sm:text-sm transition-all active:scale-95"
+            title="Test sound and notification immediately"
+          >
+            <span>🔊 Test Alert</span>
+          </button>
+          <button
             onClick={handleOpenAdd}
-            className="flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-medium rounded-xl shadow-lg shadow-indigo-500/20 text-sm transition-all active:scale-95"
+            className="flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-medium rounded-xl shadow-lg shadow-indigo-500/20 text-xs sm:text-sm transition-all active:scale-95"
           >
             <Plus className="w-4 h-4" />
             <span>Add Reminder</span>

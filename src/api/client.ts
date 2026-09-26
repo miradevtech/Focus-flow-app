@@ -43,7 +43,7 @@ export function setStoredApiBase(url: string): void {
 
 const API_BASE = getStoredApiBase();
 
-async function fetchWithRetry(url: string, options: RequestInit, retries = 0, timeoutMs = 4000): Promise<Response> {
+async function fetchWithRetry(url: string, options: RequestInit, retries = 1, timeoutMs = 12000): Promise<Response> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
 
@@ -87,6 +87,17 @@ function handleOfflineFallback<T>(endpoint: string, options: RequestInit): T {
 
   const existingData = JSON.parse(localStorage.getItem(storageKey) || '[]');
 
+  if (endpoint.includes('/dismiss') && itemId) {
+    const updatedData = existingData.map((item: any) => {
+      if (item.id === itemId) {
+        return { ...item, status: 'dismissed', notifiedAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+      }
+      return item;
+    });
+    localStorage.setItem(storageKey, JSON.stringify(updatedData));
+    return { success: true } as unknown as T;
+  }
+
   if (method === 'GET') {
     if (itemId) {
       const item = existingData.find((i: any) => i.id === itemId);
@@ -96,12 +107,13 @@ function handleOfflineFallback<T>(endpoint: string, options: RequestInit): T {
   }
 
   if (method === 'POST') {
+    const defaultStatus = collectionName === 'alerts' ? 'pending' : 'active';
     const newItem = {
       id: 'id_' + Math.random().toString(36).substring(2, 9),
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
       completed: false,
-      status: 'active',
+      status: defaultStatus,
       ...body
     };
     existingData.unshift(newItem);

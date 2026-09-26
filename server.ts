@@ -790,11 +790,12 @@ async function main() {
     }
 
     const tz = userTimezone || Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
-    let remindAtUtc = clientRemindAtUtc;
+    const [h, m] = String(time).replace('.', ':').split(':');
+    const cleanTime = `${String(parseInt(h, 10) || 0).padStart(2, '0')}:${String(parseInt(m, 10) || 0).padStart(2, '0')}`;
 
+    let remindAtUtc = clientRemindAtUtc;
     if (!remindAtUtc) {
       try {
-        const cleanTime = String(time).replace('.', ':');
         const localDateStr = `${date}T${cleanTime}:00`;
         const localTimeMs = new Date(localDateStr).getTime();
         if (isNaN(localTimeMs)) {
@@ -814,7 +815,7 @@ async function main() {
       title: title.trim(),
       description: (description || '').trim(),
       date,
-      time,
+      time: cleanTime,
       remindAtUtc,
       userTimezone: tz,
       status: 'pending',

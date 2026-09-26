@@ -1,4 +1,4 @@
-// FocusFlow Web Push Service Worker
+// FocusFlow Web Push & Notification Service Worker
 self.addEventListener('install', (event) => {
   self.skipWaiting();
 });
@@ -29,7 +29,7 @@ self.addEventListener('push', (event) => {
     body: data.body,
     icon: data.icon || '/icon-192.png',
     badge: data.badge || '/icon-192.png',
-    vibrate: [100, 50, 100],
+    vibrate: [200, 100, 200, 100, 400],
     data: data.data || { url: '/?tab=alerts' },
     actions: [
       { action: 'open', title: 'Open FocusFlow' },
@@ -40,6 +40,26 @@ self.addEventListener('push', (event) => {
   event.waitUntil(
     self.registration.showNotification(data.title, options)
   );
+});
+
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SHOW_NOTIFICATION') {
+    const options = {
+      body: event.data.body || 'You have an active scheduled reminder.',
+      icon: '/icon-192.png',
+      badge: '/icon-192.png',
+      vibrate: [200, 100, 200, 100, 400],
+      data: { url: '/?tab=alerts' },
+      actions: [
+        { action: 'open', title: 'Open FocusFlow' },
+        { action: 'dismiss', title: 'Dismiss' }
+      ]
+    };
+
+    event.waitUntil(
+      self.registration.showNotification(event.data.title || 'FocusFlow Reminder', options)
+    );
+  }
 });
 
 self.addEventListener('notificationclick', (event) => {

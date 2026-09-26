@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   User,
   TabType,
@@ -152,44 +152,104 @@ export default function App() {
 
   // Active Reminder Watcher & In-App Alerts
   const [triggeredPopup, setTriggeredPopup] = useState<Alert | null>(null);
+  const audioCtxRef = useRef<AudioContext | null>(null);
+
+  // Unlock AudioContext on first mobile user interaction
+  useEffect(() => {
+    const unlockAudio = () => {
+      try {
+        if (!audioCtxRef.current) {
+          audioCtxRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+        }
+        if (audioCtxRef.current.state === 'suspended') {
+          audioCtxRef.current.resume();
+        }
+      } catch {}
+    };
+    window.addEventListener('click', unlockAudio, { once: true });
+    window.addEventListener('touchstart', unlockAudio, { once: true });
+    return () => {
+      window.removeEventListener('click', unlockAudio);
+      window.removeEventListener('touchstart', unlockAudio);
+    };
+  }, []);
 
   const playChime = () => {
     try {
-      const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
-      const osc = audioCtx.createOscillator();
-      const gain = audioCtx.createGain();
+      if (!audioCtxRef.current) {
+        audioCtxRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+      }
+      const ctx = audioCtxRef.current;
+      if (ctx.state === 'suspended') {
+        ctx.resume();
+      }
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
       osc.type = 'sine';
-      osc.frequency.setValueAtTime(587.33, audioCtx.currentTime); // D5
-      osc.frequency.exponentialRampToValueAtTime(880, audioCtx.currentTime + 0.15); // A5
-      gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.5);
+      osc.frequency.setValueAtTime(587.33, ctx.currentTime); // D5
+      osc.frequency.exponentialRampToValueAtTime(880, ctx.currentTime + 0.15); // A5
+      gain.gain.setValueAtTime(0.4, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.6);
       osc.connect(gain);
-      gain.connect(audioCtx.destination);
+      gain.connect(ctx.destination);
       osc.start();
-      osc.stop(audioCtx.currentTime + 0.5);
+      osc.stop(ctx.currentTime + 0.6);
     } catch {}
+
+    // Physical vibration on mobile
+    if ('vibrate' in navigator) {
+      try {
+        navigator.vibrate([300, 150, 300, 150, 500]);
+      } catch {}
+    }
   };
 
   useEffect(() => {
-    const interval = setInterval(() => {
+    const parseTimeToMinutes = (t: string): number => {
+      if (!t) return 0;
+      const parts = t.replace('.', ':').split(':');
+      const h = parseInt(parts[0], 10) || 0;
+      const m = parseInt(parts[1], 10) || 0;
+      return h * 60 + m;
+    };
+
+    const checkAlerts = () => {
       if (!alerts || alerts.length === 0) return;
       const now = new Date();
-      const nowTime = now.getHours().toString().padStart(2, '0') + ':' + now.getMinutes().toString().padStart(2, '0');
-      const todayStr = now.toISOString().split('T')[0];
+      const nowMinutes = now.getHours() * 60 + now.getMinutes();
+      const localYear = now.getFullYear();
+      const localMonth = String(now.getMonth() + 1).padStart(2, '0');
+      const localDay = String(now.getDate()).padStart(2, '0');
+      const todayStr = `${localYear}-${localMonth}-${localDay}`;
 
       alerts.forEach((alert) => {
-        if (alert.status === 'pending') {
-          const cleanTime = (alert.time || '').replace('.', ':');
-          const isDue = (alert.date < todayStr) || (alert.date === todayStr && cleanTime <= nowTime);
+        // Accept pending or active status
+        const isPending = alert.status === 'pending' || (alert.status as string) === 'active';
+        if (isPending) {
+          const alertMinutes = parseTimeToMinutes(alert.time);
+          const isDue = (alert.date < todayStr) || (alert.date === todayStr && alertMinutes <= nowMinutes);
+
           if (isDue) {
             playChime();
             setTriggeredPopup(alert);
 
+            // Native browser notification
             if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
               try {
                 new Notification(`FocusFlow Reminder: ${alert.title}`, {
                   body: alert.description || `Scheduled for ${alert.time}`,
                   icon: '/icon-192.png'
+                });
+              } catch {}
+            }
+
+            // Service worker background notification
+            if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+              try {
+                navigator.serviceWorker.controller.postMessage({
+                  type: 'SHOW_NOTIFICATION',
+                  title: `FocusFlow Reminder: ${alert.title}`,
+                  body: alert.description || `Scheduled for ${alert.time}`
                 });
               } catch {}
             }
@@ -200,7 +260,11 @@ export default function App() {
           }
         }
       });
-    }, 5000);
+    };
+
+    // Run check immediately on mount/data update and every 3 seconds
+    checkAlerts();
+    const interval = setInterval(checkAlerts, 3000);
 
     return () => clearInterval(interval);
   }, [alerts]);
