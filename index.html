@@ -20,7 +20,41 @@
     <script src="https://accounts.google.com/gsi/client" async defer></script>
   </head>
   <body class="bg-[#090D16] text-slate-100 antialiased selection:bg-indigo-500/30 selection:text-indigo-200 overflow-x-hidden min-h-screen">
-    <div id="root"></div>
+    <div id="root">
+      <!-- Instant pre-bundle splash screen: zero blank screen delay -->
+      <div id="initial-splash" style="position:fixed;inset:0;background:#090d16;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:99999;font-family:-apple-system,BlinkMacSystemFont,'Plus Jakarta Sans',sans-serif;color:#ffffff;text-align:center;padding:1rem;">
+        <div style="width:72px;height:72px;border-radius:20px;background:linear-gradient(135deg,#4f46e5,#9333ea,#ec4899);padding:2px;display:flex;align-items:center;justify-content:center;box-shadow:0 12px 30px rgba(99,102,241,0.3);margin-bottom:1.5rem;animation:ff-pulse 1.8s ease-in-out infinite;">
+          <div style="width:100%;height:100%;background:#0d111d;border-radius:18px;display:flex;align-items:center;justify-content:center;">
+            <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#818cf8" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="9" stroke="rgba(168,85,247,0.3)" />
+              <circle cx="12" cy="12" r="5" stroke="#818cf8" />
+              <circle cx="12" cy="12" r="1.5" fill="#f472b6" />
+              <path d="M12 2v3M12 19v3M2 12h3M19 12h3" stroke="rgba(129,140,248,0.8)" />
+            </svg>
+          </div>
+        </div>
+        <h1 style="font-size:1.75rem;font-weight:800;letter-spacing:-0.03em;margin:0 0 0.35rem 0;background:linear-gradient(90deg,#818cf8,#c084fc,#f472b6);-webkit-background-clip:text;-webkit-text-fill-color:transparent;">
+          FocusFlow Pro
+        </h1>
+        <p style="font-size:0.75rem;color:#94a3b8;margin:0 0 1.5rem 0;font-weight:500;">
+          Your Productivity & Focus Command Center
+        </p>
+        <div style="width:160px;height:4px;background:#1e293b;border-radius:999px;overflow:hidden;position:relative;">
+          <div style="width:100%;height:100%;background:linear-gradient(90deg,#4f46e5,#9333ea);border-radius:999px;animation:ff-bar 1.2s infinite ease-in-out;"></div>
+        </div>
+      </div>
+      <style>
+        @keyframes ff-pulse {
+          0%, 100% { transform: scale(1); }
+          50% { transform: scale(1.05); }
+        }
+        @keyframes ff-bar {
+          0% { transform: translateX(-100%); }
+          50% { transform: translateX(0); }
+          100% { transform: translateX(100%); }
+        }
+      </style>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

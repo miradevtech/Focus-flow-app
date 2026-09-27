@@ -1,13 +1,14 @@
 import React, { useState } from 'react';
 import { api } from '../api/client';
 import { User } from '../types';
-import { Lock, Mail, User as UserIcon, Sparkles } from 'lucide-react';
+import { Lock, Mail, User as UserIcon, Sparkles, X } from 'lucide-react';
 
 interface AuthModalProps {
   onSuccess: (user: User) => void;
+  onClose?: () => void;
 }
 
-export const AuthModal: React.FC<AuthModalProps> = ({ onSuccess }) => {
+export const AuthModal: React.FC<AuthModalProps> = ({ onSuccess, onClose }) => {
   const [isLogin, setIsLogin] = useState(true);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -50,6 +51,16 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onSuccess }) => {
         {/* Glow accent */}
         <div className="absolute -top-24 -right-24 w-48 h-48 bg-blue-600/20 rounded-full blur-3xl pointer-events-none" />
         <div className="absolute -bottom-24 -left-24 w-48 h-48 bg-purple-600/20 rounded-full blur-3xl pointer-events-none" />
+
+        {onClose && (
+          <button
+            onClick={onClose}
+            className="absolute top-4 right-4 z-20 p-2 rounded-xl text-zinc-400 hover:text-white bg-zinc-900/80 hover:bg-zinc-800 border border-zinc-800 transition-colors"
+            title="Close"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        )}
 
         <div className="text-center mb-8 relative z-10">
           <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-gradient-to-tr from-blue-600 to-purple-600 text-white shadow-lg shadow-blue-500/20 mb-4">

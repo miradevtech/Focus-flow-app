@@ -39,7 +39,7 @@ export default function App() {
   useEffect(() => {
     const timer = setTimeout(() => {
       setShowSplash(false);
-    }, 1200);
+    }, 600);
     return () => clearTimeout(timer);
   }, []);
 
@@ -466,7 +466,7 @@ export default function App() {
             </div>
             <button
               onClick={() => setTriggeredPopup(null)}
-              className="px-3.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shrink-0 transition-all shadow-md shadow-indigo-600/30"
+              className="px-3.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 active:scale-95 text-white text-xs font-semibold shrink-0 transition-all shadow-md shadow-indigo-600/30 cursor-pointer"
             >
               Dismiss
             </button>

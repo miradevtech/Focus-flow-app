@@ -1,12 +1,13 @@
 import React from 'react';
 import { User, TabType } from '../types';
-import { Bell } from 'lucide-react';
+import { Bell, LogIn, LogOut, User as UserIcon } from 'lucide-react';
 import { Logo } from './Logo';
 
 interface HeaderProps {
   user: User;
   currentTab: TabType;
-  onLogout: () => void;
+  onLogout?: () => void;
+  onOpenAuth?: () => void;
   onOpenQuickAdd?: () => void;
   onNavigate: (tab: TabType) => void;
 }
@@ -61,7 +62,7 @@ export const Header: React.FC<HeaderProps> = ({
       <div className="flex items-center gap-2.5">
         <button
           onClick={() => onNavigate('alerts')}
-          className="relative p-2.5 rounded-xl bg-zinc-900 border border-zinc-800 text-zinc-300 hover:text-white hover:bg-zinc-800 transition-all"
+          className="relative p-2.5 rounded-xl bg-zinc-900 border border-zinc-800 text-zinc-300 hover:text-white hover:bg-zinc-800 active:scale-95 transition-all cursor-pointer"
           title="Reminders & Alerts"
         >
           <Bell className="w-4 h-4" />

@@ -82,7 +82,7 @@ export const Navbar: React.FC<NavbarProps> = ({ currentTab, onSelectTab }) => {
               <button
                 key={item.id}
                 onClick={() => onSelectTab(item.id)}
-                className={`flex flex-col items-center justify-center min-w-[40px] flex-1 py-1 px-0.5 rounded-xl transition-all ${
+                className={`flex flex-col items-center justify-center min-w-[40px] flex-1 py-1 px-0.5 rounded-xl active:scale-95 cursor-pointer transition-all ${
                   isActive ? 'text-indigo-400 bg-indigo-600/15 font-semibold' : 'text-zinc-400 hover:text-zinc-200'
                 }`}
               >
