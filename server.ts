@@ -40,6 +40,13 @@ async function main() {
   app.use(express.static(path.resolve(process.cwd(), 'public')));
 
   // ==========================================
+  // HEALTH CHECK ROUTE
+  // ==========================================
+  app.get('/health', (_req, res) => {
+    res.status(200).json({ status: 'ok' });
+  });
+
+  // ==========================================
   // AUTH ROUTES
   // ==========================================
 
